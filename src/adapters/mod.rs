@@ -1,4 +1,5 @@
 use std::process::Command;
+use serde::Serialize;
 
 /// Run a git command and return Result<String, String>
 fn run_git_command(args: &[&str]) -> Result<String, String> {
@@ -105,6 +106,7 @@ pub fn git_branches_detailed() -> Result<Vec<BranchInfo>, String> {
 }
 
 /// Struct for branch info
+#[derive(Serialize)]
 pub struct BranchInfo {
     pub name: String,
     pub author: String,

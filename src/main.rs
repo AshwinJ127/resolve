@@ -25,7 +25,10 @@ enum Commands {
     Show {
         #[arg(value_enum)]
         entity: ShowEntity,
-    }
+
+        #[arg(long)]
+        json: bool,
+    },
 
 }
 
@@ -55,8 +58,8 @@ fn main() {
         Commands::Fix => {
             
         }
-        Commands::Show { entity } => match entity {
-            ShowEntity::Branches => core::show_branches(),
+        Commands::Show { entity, json } => match entity {
+            ShowEntity::Branches => ui::show_branches(json),
             ShowEntity::Remotes => println!("Show remotes not implemented yet"),
             ShowEntity::Commits => println!("Show commits not implemented yet"),
         },
