@@ -55,63 +55,34 @@ pub fn git_fetch() -> Result<String, String> {
     run_git_command(&["fetch"])
 }
 
-/// Get all local branches with last commit info
-pub fn git_branches_detailed() -> Result<Vec<BranchInfo>, String> {
-    let branches_output = run_git_command(&["for-each-ref", "--format=%(refname:short)", "refs/heads/"])?;
-    
-    let branches: Vec<BranchInfo> = branches_output
+pub fn git_list_branches() -> Result<Vec<String>, String> {
+    let output = run_git_command(&["for-each-ref", "--format=%(refname:short)", "refs/heads/"])?;
+    let branches = output
         .lines()
-        .map(|branch_name| {
-            // first commit (creator)
-            let creator = run_git_command(&[
-                "log",
-                "--reverse",
-                "--format=%an|%ad",
-                "--date=short",
-                branch_name,
-            ])
-            .ok()
-            .and_then(|out| out.lines().next().map(|line| line.to_string()))
-            .unwrap_or_else(|| "Unknown|Unknown".to_string());
-
-            let mut parts = creator.split('|');
-            let author = parts.next().unwrap_or("Unknown").to_string();
-            let time_created = parts.next().unwrap_or("Unknown").to_string();
-
-            // last commit
-            let last_commit_output = run_git_command(&[
-                "log",
-                "-1",
-                "--format=%ad|%s",
-                "--date=short",
-                branch_name,
-            ])
-            .unwrap_or_else(|_| "Unknown|No commit".to_string());
-
-            let mut last_parts = last_commit_output.split('|');
-            let last_change = last_parts.next().unwrap_or("Unknown").to_string();
-            let last_commit = last_parts.next().unwrap_or("No commit").to_string();
-
-            BranchInfo {
-                name: branch_name.to_string(),
-                author,
-                time_created,
-                last_change,
-                last_commit,
-            }
-        })
+        .map(|line| line.trim().to_string())
         .collect();
-
     Ok(branches)
 }
 
-/// Struct for branch info
-#[derive(Serialize)]
-pub struct BranchInfo {
-    pub name: String,
-    pub author: String,
-    pub time_created: String,
-    pub last_change: String,
-    pub last_commit: String,
+pub fn git_first_commit(branch: &str) -> Result<String, String> {
+    let output = run_git_command(&[
+        "log",
+        "--reverse",
+        "--format=%an|%ad",
+        "--date=short",
+        branch,
+    ])?;
+    Ok(output.lines().next().unwrap_or("Unknown|Unknown").to_string())
+}
+
+pub fn git_last_commit(branch: &str) -> Result<String, String> {
+    let output = run_git_command(&[
+        "log",
+        "-1",
+        "--format=%ad|%s",
+        "--date=short",
+        branch,
+    ])?;
+    Ok(output.lines().next().unwrap_or("Unknown|No commit").to_string())
 }
 

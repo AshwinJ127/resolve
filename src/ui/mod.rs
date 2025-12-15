@@ -1,8 +1,8 @@
-use crate::adapters::BranchInfo;
+use crate::core::BranchInfo;
 use prettytable::{Table, Row, Cell, format};
 
 pub fn show_branches(json: bool) {
-    let branches = match crate::adapters::git_branches_detailed() {
+    let branches = match crate::core::branches_detailed() {
         Ok(b) => b,
         Err(err) => {
             eprintln!("Error retrieving branches: {}", err);
