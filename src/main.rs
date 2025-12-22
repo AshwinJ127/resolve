@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 mod adapters;
 mod core;
@@ -26,13 +26,22 @@ enum Commands {
         #[arg(value_enum)]
         entity: ShowEntity,
 
+        /// Output as JSON instead of table
         #[arg(long)]
         json: bool,
+
+        /// Branch name for commits (optional)
+        #[arg(long, default_value = "main")]
+        branch: String,
+
+        /// Number of commits to show
+        #[arg(long, default_value_t = 10)]
+        count: usize,
     },
 
 }
 
-#[derive(clap::ValueEnum, Clone)]
+#[derive(ValueEnum, Clone)]
 enum ShowEntity {
     Branches,
     Remotes,
@@ -58,10 +67,10 @@ fn main() {
         Commands::Fix => {
             
         }
-        Commands::Show { entity, json } => match entity {
+        Commands::Show { entity, json, branch, count } => match entity {
             ShowEntity::Branches => ui::show_branches(json),
-            ShowEntity::Remotes => println!("Show remotes not implemented yet"),
-            ShowEntity::Commits => println!("Show commits not implemented yet"),
+            ShowEntity::Remotes => ui::show_remotes(json),
+            ShowEntity::Commits => ui::show_commits(&branch, count, json),
         },
     }
 }

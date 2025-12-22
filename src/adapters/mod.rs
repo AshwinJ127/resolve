@@ -86,3 +86,39 @@ pub fn git_last_commit(branch: &str) -> Result<String, String> {
     Ok(output.lines().next().unwrap_or("Unknown|No commit").to_string())
 }
 
+// List remotes
+pub fn git_list_remotes() -> Result<Vec<String>, String> {
+    let output = Command::new("git")
+        .args(["remote", "-v"])
+        .output()
+        .map_err(|e| format!("Failed to execute git: {}", e))?;
+
+    if output.status.success() {
+        let remotes = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|line| line.to_string())
+            .collect();
+        Ok(remotes)
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+// List commits for a branch
+pub fn git_list_commits(branch: &str, count: usize) -> Result<Vec<String>, String> {
+    let output = Command::new("git")
+        .args(["log", &format!("-{}", count), "--pretty=format:%h|%an|%ad|%s", "--date=short", branch])
+        .output()
+        .map_err(|e| format!("Failed to execute git: {}", e))?;
+
+    if output.status.success() {
+        let commits = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|line| line.to_string())
+            .collect();
+        Ok(commits)
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+

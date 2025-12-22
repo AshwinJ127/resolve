@@ -1,5 +1,7 @@
-use crate::core::BranchInfo;
 use prettytable::{Table, Row, Cell, format};
+use serde::Serialize;
+
+use crate::core::{remotes_detailed, commits_detailed, CommitInfo, BranchInfo};
 
 pub fn show_branches(json: bool) {
     let branches = match crate::core::branches_detailed() {
@@ -50,5 +52,75 @@ pub fn print_branches_json(branches: &[BranchInfo]) {
     match serde_json::to_string_pretty(branches) {
         Ok(json) => println!("{}", json),
         Err(e) => eprintln!("Failed to serialize branches: {}", e),
+    }
+}
+
+
+pub fn show_remotes(json: bool) {
+    match remotes_detailed() {
+        Ok(remotes) => {
+            if json {
+                match serde_json::to_string_pretty(&remotes) {
+                    Ok(j) => println!("{}", j),
+                    Err(e) => eprintln!("Failed to serialize remotes: {}", e),
+                }
+            } else {
+                for r in remotes {
+                    println!("{}", r);
+                }
+            }
+        }
+        Err(e) => eprintln!("Error fetching remotes: {}", e),
+    }
+}
+
+#[derive(Serialize)]
+struct CommitDisplay {
+    hash: String,
+    author: String,
+    date: String,
+    message: String,
+}
+
+pub fn show_commits(branch: &str, count: usize, json: bool) {
+    match commits_detailed(branch, count) {
+        Ok(commits) => {
+            if json {
+                let display: Vec<CommitDisplay> = commits
+                    .into_iter()
+                    .map(|c| CommitDisplay {
+                        hash: c.hash,
+                        author: c.author,
+                        date: c.date,
+                        message: c.message,
+                    })
+                    .collect();
+                match serde_json::to_string_pretty(&display) {
+                    Ok(j) => println!("{}", j),
+                    Err(e) => eprintln!("Failed to serialize commits: {}", e),
+                }
+            } else {
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+                table.set_titles(Row::new(vec![
+                    Cell::new("Hash"),
+                    Cell::new("Author"),
+                    Cell::new("Date"),
+                    Cell::new("Message"),
+                ]));
+
+                for c in commits {
+                    table.add_row(Row::new(vec![
+                        Cell::new(&c.hash),
+                        Cell::new(&c.author),
+                        Cell::new(&c.date),
+                        Cell::new(&c.message),
+                    ]));
+                }
+
+                table.printstd();
+            }
+        }
+        Err(e) => eprintln!("Error fetching commits: {}", e),
     }
 }

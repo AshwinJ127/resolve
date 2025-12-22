@@ -10,6 +10,13 @@ pub struct BranchInfo {
     pub last_commit: String,
 }
 
+pub struct CommitInfo {
+    pub hash: String,
+    pub author: String,
+    pub date: String,
+    pub message: String,
+}
+
 pub fn branches_detailed() -> Result<Vec<BranchInfo>, String> {
     let branch_names = adapters::git_list_branches()?;
 
@@ -41,4 +48,22 @@ pub fn branches_detailed() -> Result<Vec<BranchInfo>, String> {
         .collect();
 
     Ok(branches)
+}
+
+pub fn remotes_detailed() -> Result<Vec<String>, String> {
+    crate::adapters::git_list_remotes()
+}
+
+pub fn commits_detailed(branch: &str, count: usize) -> Result<Vec<CommitInfo>, String> {
+    let raw_commits = crate::adapters::git_list_commits(branch, count)?;
+    let commits: Vec<CommitInfo> = raw_commits.into_iter().map(|line| {
+        let parts: Vec<&str> = line.split('|').collect();
+        CommitInfo {
+            hash: parts.get(0).unwrap_or(&"").to_string(),
+            author: parts.get(1).unwrap_or(&"").to_string(),
+            date: parts.get(2).unwrap_or(&"").to_string(),
+            message: parts.get(3).unwrap_or(&"").to_string(),
+        }
+    }).collect();
+    Ok(commits)
 }
