@@ -41,8 +41,8 @@ pub struct FileChange {
 #[derive(Serialize)]
 pub struct StatusSummary {
     pub branch: String,
-    pub ahead: usize,
-    pub behind: usize,
+    pub ahead: Option<usize>,
+    pub behind: Option<usize>,
     pub changes: Vec<FileChange>,
 }
 
@@ -51,8 +51,10 @@ pub fn get_status() -> Result<StatusSummary, String> {
     let branch = adapters::git_branch()?;
     let changes = get_changed_files()?;
     
-    // Default to 0,0 if no upstream is set (e.g., local-only branch)
-    let (ahead, behind) = adapters::git_ahead_behind(&branch).unwrap_or((0, 0));
+    let (ahead, behind) = match adapters::git_ahead_behind(&branch) {
+        Ok((a, b)) => (Some(a), Some(b)),
+        Err(_) => (None, None),
+    };
 
     Ok(StatusSummary {
         branch,

@@ -338,24 +338,25 @@ pub fn show_status() {
         }
     };
 
-    println!("\nOn branch: {}", status.branch);
+    println!("\nBranch: {}", status.branch);
 
-    // 1. Sync Status
-    if status.ahead == 0 && status.behind == 0 {
-        println!("Up to date with remote");
-    } else {
-        if status.ahead > 0 {
-            println!("⬆ {} commit(s) ahead (use 'rfx push' to share)", status.ahead);
+    // 1. Sync Status Logic
+    match (status.ahead, status.behind) {
+        (Some(0), Some(0)) => println!("Status: Up to date with remote"),
+        (Some(a), Some(b)) => {
+            if a > 0 { println!("Status: {} commit(s) ahead (Needs Push)", a); }
+            if b > 0 { println!("Status: {} commit(s) behind (Needs Pull)", b); }
         }
-        if status.behind > 0 {
-            println!("⬇ {} commit(s) behind (use 'rfx pull' to update)", status.behind);
+        (None, None) => {
+            println!("Status: Not published (Local only)");
         }
+        _ => {}, 
     }
     println!();
 
     // 2. File Status
     if status.changes.is_empty() {
-        println!("Working directory clean");
+        println!("Working directory is clean.");
     } else {
         println!("Unsaved Changes:");
         for file in status.changes {
@@ -365,10 +366,9 @@ pub fn show_status() {
                 "D" | "D " => "[Del]",
                 _ => "[...]",
             };
-            println!("   {} {}", label, file.path);
+            println!("  {} {}", label, file.path);
         }
         println!("\nTip: Use 'rfx new commit' to save these.");
     }
     println!();
 }
-
