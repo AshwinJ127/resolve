@@ -1,7 +1,7 @@
 use prettytable::{Table, Row, Cell, format};
 use serde::Serialize;
 
-use crate::core::{remotes_detailed, commits_detailed, CommitInfo, BranchInfo};
+use crate::core::{remotes_detailed, commits_detailed, BranchInfo};
 
 pub fn show_branches(json: bool) {
     let branches = match crate::core::branches_detailed() {
@@ -57,22 +57,50 @@ pub fn print_branches_json(branches: &[BranchInfo]) {
 
 
 pub fn show_remotes(json: bool) {
-    match remotes_detailed() {
-        Ok(remotes) => {
-            if json {
-                match serde_json::to_string_pretty(&remotes) {
-                    Ok(j) => println!("{}", j),
-                    Err(e) => eprintln!("Failed to serialize remotes: {}", e),
-                }
-            } else {
-                for r in remotes {
-                    println!("{}", r);
-                }
-            }
+    let remotes = match remotes_detailed() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Error fetching remotes: {}", e);
+            return;
         }
-        Err(e) => eprintln!("Error fetching remotes: {}", e),
+    };
+
+    if json {
+        match serde_json::to_string_pretty(&remotes) {
+            Ok(j) => println!("{}", j),
+            Err(e) => eprintln!("Failed to serialize remotes: {}", e),
+        }
+        return;
     }
+
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+
+    table.set_titles(Row::new(vec![
+        Cell::new("Name"),
+        Cell::new("Direction"),
+        Cell::new("Host"),
+        Cell::new("Owner"),
+        Cell::new("Repo"),
+    ]));
+
+    for r in remotes {
+        let owner = r.owner.unwrap_or_else(|| "-".into());
+        let repo = r.repo.unwrap_or_else(|| "-".into());
+        let host = r.host.unwrap_or_else(|| "-".into());
+
+        table.add_row(Row::new(vec![
+            Cell::new(&r.name),
+            Cell::new(&r.direction),
+            Cell::new(&host),
+            Cell::new(&owner),
+            Cell::new(&repo),
+        ]));
+    }
+
+    table.printstd();
 }
+
 
 #[derive(Serialize)]
 struct CommitDisplay {
@@ -83,44 +111,53 @@ struct CommitDisplay {
 }
 
 pub fn show_commits(branch: &str, count: usize, json: bool) {
-    match commits_detailed(branch, count) {
-        Ok(commits) => {
-            if json {
-                let display: Vec<CommitDisplay> = commits
-                    .into_iter()
-                    .map(|c| CommitDisplay {
-                        hash: c.hash,
-                        author: c.author,
-                        date: c.date,
-                        message: c.message,
-                    })
-                    .collect();
-                match serde_json::to_string_pretty(&display) {
-                    Ok(j) => println!("{}", j),
-                    Err(e) => eprintln!("Failed to serialize commits: {}", e),
-                }
-            } else {
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-                table.set_titles(Row::new(vec![
-                    Cell::new("Hash"),
-                    Cell::new("Author"),
-                    Cell::new("Date"),
-                    Cell::new("Message"),
-                ]));
-
-                for c in commits {
-                    table.add_row(Row::new(vec![
-                        Cell::new(&c.hash),
-                        Cell::new(&c.author),
-                        Cell::new(&c.date),
-                        Cell::new(&c.message),
-                    ]));
-                }
-
-                table.printstd();
-            }
+    let commits = match commits_detailed(branch, count) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error fetching commits: {}", e);
+            return;
         }
-        Err(e) => eprintln!("Error fetching commits: {}", e),
+    };
+
+    if json {
+        match serde_json::to_string_pretty(&commits) {
+            Ok(j) => println!("{}", j),
+            Err(e) => eprintln!("Failed to serialize commits: {}", e),
+        }
+        return;
     }
+
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+
+    table.set_titles(Row::new(vec![
+        Cell::new("Hash"),
+        Cell::new("Author"),
+        Cell::new("Date"),
+        Cell::new("Message"),
+    ]));
+
+    for c in commits {
+        let hash = if c.hash.len() > 7 { &c.hash[..7] } else { &c.hash };
+        let author = if c.author.len() > 15 {
+            format!("{}…", &c.author[..14])
+        } else {
+            c.author
+        };
+        let message = if c.message.len() > 30 {
+            format!("{}…", &c.message[..29])
+        } else {
+            c.message
+        };
+
+        table.add_row(Row::new(vec![
+            Cell::new(hash),
+            Cell::new(&author),
+            Cell::new(&c.date),
+            Cell::new(&message),
+        ]));
+    }
+
+    table.printstd();
 }
+

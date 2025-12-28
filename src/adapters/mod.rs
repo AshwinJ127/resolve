@@ -1,5 +1,4 @@
 use std::process::Command;
-use serde::Serialize;
 
 /// Run a git command and return Result<String, String>
 fn run_git_command(args: &[&str]) -> Result<String, String> {
@@ -55,6 +54,7 @@ pub fn git_fetch() -> Result<String, String> {
     run_git_command(&["fetch"])
 }
 
+/// List branches
 pub fn git_list_branches() -> Result<Vec<String>, String> {
     let output = run_git_command(&["for-each-ref", "--format=%(refname:short)", "refs/heads/"])?;
     let branches = output
@@ -64,6 +64,7 @@ pub fn git_list_branches() -> Result<Vec<String>, String> {
     Ok(branches)
 }
 
+/// Get the first commit info for a branch
 pub fn git_first_commit(branch: &str) -> Result<String, String> {
     let output = run_git_command(&[
         "log",
@@ -75,6 +76,7 @@ pub fn git_first_commit(branch: &str) -> Result<String, String> {
     Ok(output.lines().next().unwrap_or("Unknown|Unknown").to_string())
 }
 
+/// Get the last commit info for a branch
 pub fn git_last_commit(branch: &str) -> Result<String, String> {
     let output = run_git_command(&[
         "log",
@@ -88,37 +90,30 @@ pub fn git_last_commit(branch: &str) -> Result<String, String> {
 
 // List remotes
 pub fn git_list_remotes() -> Result<Vec<String>, String> {
-    let output = Command::new("git")
-        .args(["remote", "-v"])
-        .output()
-        .map_err(|e| format!("Failed to execute git: {}", e))?;
-
-    if output.status.success() {
-        let remotes = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(|line| line.to_string())
-            .collect();
-        Ok(remotes)
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    let output = run_git_command(&["remote", "-v"])?;
+    let remotes = output
+        .lines()
+        .map(|line| line.trim().to_string())
+        .collect();
+    Ok(remotes)
 }
+
 
 // List commits for a branch
 pub fn git_list_commits(branch: &str, count: usize) -> Result<Vec<String>, String> {
-    let output = Command::new("git")
-        .args(["log", &format!("-{}", count), "--pretty=format:%h|%an|%ad|%s", "--date=short", branch])
-        .output()
-        .map_err(|e| format!("Failed to execute git: {}", e))?;
-
-    if output.status.success() {
-        let commits = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(|line| line.to_string())
-            .collect();
-        Ok(commits)
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    let count_arg = format!("-{}", count);
+    let output = run_git_command(&[
+        "log",
+        &count_arg,
+        "--pretty=format:%h|%an|%ad|%s",
+        "--date=short",
+        branch,
+    ])?;
+    let commits = output
+        .lines()
+        .map(|line| line.trim().to_string())
+        .collect();
+    Ok(commits)
 }
+
 
