@@ -8,7 +8,7 @@ fn run_git_command(args: &[&str]) -> Result<String, String> {
         .map_err(|e| format!("Failed to execute git: {}", e))?;
 
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
@@ -125,7 +125,7 @@ pub fn git_list_commits(branch: &str, count: usize) -> Result<Vec<String>, Strin
 /// Get a list of changed files with their status code
 /// Returns a tuple of (Status Code, File Path)
 pub fn git_status_porcelain() -> Result<Vec<(String, String)>, String> {
-    let output = run_git_command(&["status", "--porcelain"])?;
+    let output = run_git_command(&["status", "--porcelain=v1"])?;
     
     if output.is_empty() {
         return Ok(Vec::new());
