@@ -196,3 +196,29 @@ pub fn create_commit(message: &str) -> Result<String, String> {
 
     adapters::git_commit(msg)
 }
+
+/// Check if a branch name is valid and available
+pub fn validate_new_branch_name(name: &str) -> Result<(), String> {
+    let name = name.trim();
+
+    // 1. Basic Syntax Rules
+    if name.is_empty() {
+        return Err("Branch name cannot be empty.".to_string());
+    }
+    if name.contains(char::is_whitespace) {
+        return Err("Branch names cannot contain spaces.".to_string());
+    }
+
+    // 2. Check Existence
+    let existing_branches = adapters::git_list_branches()?;
+    if existing_branches.iter().any(|b| b == name) {
+        return Err(format!("A branch named '{}' already exists.", name));
+    }
+
+    Ok(())
+}
+
+/// Create and switch to a new branch
+pub fn create_branch(name: &str) -> Result<String, String> {
+    adapters::git_create_branch(name)
+}

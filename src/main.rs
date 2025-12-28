@@ -59,6 +59,8 @@ enum NewEntity {
     /// Create a new commit
     Commit,
 
+    /// Create a new branch
+    Branch,
 }
 
 
@@ -87,7 +89,7 @@ fn main() {
         },
         Commands::New { entity } => match entity {
             NewEntity::Commit => ui::new_commit(),
-            //NewEntity::Branch => ui::new_branch(), // stub for now
+            NewEntity::Branch => ui::new_branch(), 
         },
     }
 }

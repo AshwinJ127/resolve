@@ -39,6 +39,11 @@ pub fn git_commit(message: &str) -> Result<String, String> {
     run_git_command(&["commit", "-m", message])
 }
 
+/// Create and switch to a new branch
+pub fn git_create_branch(name: &str) -> Result<String, String> {
+    run_git_command(&["checkout", "-b", name])
+}
+
 
 /// Stash uncommitted changes
 pub fn git_stash() -> Result<String, String> {

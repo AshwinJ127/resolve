@@ -3,7 +3,11 @@ use serde::Serialize;
 use std::io;
 use inquire::{Confirm, MultiSelect, Text, validator::Validation};
 
-use crate::core::{BranchInfo, CommitInfo, RemoteInfo, branches_detailed, commits_detailed, remotes_detailed, create_commit, get_changed_files, stage_all_files, stage_files};
+use crate::core::{BranchInfo, CommitInfo, RemoteInfo, branches_detailed, 
+    commits_detailed, remotes_detailed, create_commit, get_changed_files, 
+    stage_all_files, stage_files,
+    validate_new_branch_name, create_branch
+};
 
 /// Display branches in a table or JSON
 pub fn show_branches(json: bool) {
@@ -262,6 +266,65 @@ pub fn new_commit() {
             }
         }
         Err(_) => println!("Commit cancelled."),
+    }
+}
+
+pub fn new_branch() {
+    // 1. Prompt for Name
+    let name_prompt = Text::new("Name for new branch:")
+        .with_validator(|input: &str| {
+            match validate_new_branch_name(input) {
+                Ok(_) => Ok(Validation::Valid),
+                Err(msg) => Ok(Validation::Invalid(msg.into())),
+            }
+        })
+        .prompt();
+
+    let name = match name_prompt {
+        Ok(n) => n.trim().to_string(),
+        Err(_) => { println!("Cancelled."); return; }
+    };
+
+    // 2. Check for Uncommitted Changes (The "Error" Prevention)
+    let changes = match get_changed_files() {
+        Ok(c) => c,
+        Err(_) => Vec::new(), 
+    };
+
+    if !changes.is_empty() {
+        println!("\nWarning: You have uncommitted changes.");
+        println!("   If you create a new branch now, these changes will move with you.");
+        
+        let count = changes.len();
+        if count <= 5 {
+            for file in changes {
+                println!("   - {}", file.path);
+            }
+        } else {
+            println!("   - {} files changed...", count);
+        }
+        println!();
+
+        let confirm = Confirm::new("Do you want to proceed and carry these changes over?")
+            .with_default(false)
+            .prompt();
+
+        match confirm {
+            Ok(true) => (),
+            _ => {
+                println!("Cancelled. Please commit or stash your changes first.");
+                return;
+            }
+        }
+    }
+
+    // 3. Execute
+    match create_branch(&name) {
+        Ok(_) => {
+            println!("\nSuccess! New branch '{}' created.", name);
+            println!("   You have been switched to this branch automatically.");
+        },
+        Err(e) => eprintln!("\nError creating branch: {}", e),
     }
 }
 
