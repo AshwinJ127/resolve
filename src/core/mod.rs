@@ -271,12 +271,9 @@ pub fn pull_changes() -> Result<String, String> {
 }
 
 
-/// Get list of remote branches with details
 pub fn get_remote_branches() -> Result<Vec<RemoteBranchInfo>, String> {
-    // 1. Fetch first to ensure data is fresh
     let _ = adapters::git_fetch(); 
 
-    // 2. Get list
     let raw = adapters::git_list_remote_branches()?;
     
     let branches = raw.into_iter().filter_map(|line| {
@@ -284,6 +281,11 @@ pub fn get_remote_branches() -> Result<Vec<RemoteBranchInfo>, String> {
         if parts.len() < 3 { return None; }
         
         let full_name = parts[0].to_string();
+        
+        if full_name.ends_with("/HEAD") {
+            return None;
+        }
+
         let short_name = full_name.splitn(2, '/').nth(1).unwrap_or(&full_name).to_string();
 
         Some(RemoteBranchInfo {
