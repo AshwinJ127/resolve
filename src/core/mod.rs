@@ -30,6 +30,12 @@ pub struct RemoteInfo {
     pub repo: Option<String>,
 }
 
+/// Represents a file change in a commit
+#[derive(Clone, Debug, Serialize)]
+pub struct FileChange {
+    pub status: String, // e.g., "M", "??", "D"
+    pub path: String,
+}
 
 /// List branches with detailed info
 pub fn branches_detailed() -> Result<Vec<BranchInfo>, String> {
@@ -150,17 +156,43 @@ pub fn commits_detailed(branch: &str, count: usize) -> Result<Vec<CommitInfo>, S
     Ok(commits)
 }
 
-/// Create a commit with the given message
+// Get list of changed files
+pub fn get_changed_files() -> Result<Vec<FileChange>, String> {
+    let raw_files = adapters::git_status_porcelain()?;
+    
+    let changes = raw_files
+        .into_iter()
+        .map(|(status, path)| FileChange { status, path })
+        .collect();
+
+    Ok(changes)
+}
+
+// Stage specific files
+pub fn stage_files(files: &[String]) -> Result<String, String> {
+    if files.is_empty() {
+        return Ok("No files to stage".to_string());
+    }
+    adapters::git_add(files)
+}
+
+// Stage all files
+pub fn stage_all_files() -> Result<String, String> {
+    adapters::git_add_all()
+}
+
+// Create commit with message
 pub fn create_commit(message: &str) -> Result<String, String> {
     let msg = message.trim();
 
     if msg.is_empty() {
         return Err("Commit message cannot be empty.".to_string());
     }
-
-    if msg.len() < 5 {
+    
+    // We can keep the length check here as a business rule
+    if msg.len() < 3 {
         return Err("Commit message is too short.".to_string());
     }
 
-    crate::adapters::git_commit(msg)
+    adapters::git_commit(msg)
 }

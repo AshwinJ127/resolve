@@ -36,7 +36,6 @@ pub fn git_push() -> Result<String, String> {
 
 /// Commit changes with a message
 pub fn git_commit(message: &str) -> Result<String, String> {
-    run_git_command(&["add", "."])?;
     run_git_command(&["commit", "-m", message])
 }
 
@@ -121,6 +120,40 @@ pub fn git_list_commits(branch: &str, count: usize) -> Result<Vec<String>, Strin
         .map(|line| line.trim().to_string())
         .collect();
     Ok(commits)
+}
+
+/// Get a list of changed files with their status code
+/// Returns a tuple of (Status Code, File Path)
+pub fn git_status_porcelain() -> Result<Vec<(String, String)>, String> {
+    let output = run_git_command(&["status", "--porcelain"])?;
+    
+    if output.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let files = output
+        .lines()
+        .map(|line| {
+            // --porcelain output is fixed: first 2 chars are status, then space, then path
+            // Example: " M src/main.rs" or "?? newfile.txt"
+            let (status, path) = line.split_at(3);
+            (status.trim().to_string(), path.trim().to_string())
+        })
+        .collect();
+
+    Ok(files)
+}
+
+/// Stage specific files
+pub fn git_add(files: &[String]) -> Result<String, String> {
+    let mut args = vec!["add"];
+    args.extend(files.iter().map(|s| s.as_str()));
+    run_git_command(&args)
+}
+
+/// Stage all files
+pub fn git_add_all() -> Result<String, String> {
+    run_git_command(&["add", "-A"])
 }
 
 

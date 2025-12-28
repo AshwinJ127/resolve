@@ -1,8 +1,9 @@
 use prettytable::{Table, Row, Cell, format};
 use serde::Serialize;
-use std::io::{self, Write};
+use std::io;
+use inquire::{Confirm, MultiSelect, Text, validator::Validation};
 
-use crate::core::{remotes_detailed, commits_detailed, BranchInfo};
+use crate::core::{BranchInfo, CommitInfo, RemoteInfo, branches_detailed, commits_detailed, remotes_detailed, create_commit, get_changed_files, stage_all_files, stage_files};
 
 /// Display branches in a table or JSON
 pub fn show_branches(json: bool) {
@@ -166,39 +167,101 @@ pub fn show_commits(branch: &str, count: usize, json: bool) {
 
 /// Create a new commit with user-provided message
 pub fn new_commit() {
-    println!("Commit message:");
-    print!("> ");
-    io::stdout().flush().unwrap();
-
-    let mut message = String::new();
-    if io::stdin().read_line(&mut message).is_err() {
-        eprintln!("Failed to read input.");
-        return;
-    }
-
-    let message = message.trim();
-
-    println!("\nCreate commit with message:");
-    println!("\"{}\"", message);
-    print!("Proceed? [Y/n]: ");
-    io::stdout().flush().unwrap();
-
-    let mut confirm = String::new();
-    io::stdin().read_line(&mut confirm).unwrap();
-
-    if confirm.trim().eq_ignore_ascii_case("n") {
-        println!("Commit cancelled.");
-        return;
-    }
-
-    match crate::core::create_commit(message) {
-        Ok(output) => {
-            println!("Commit created successfully");
-            println!("{}", output);
-        }
+    // 1. Get current status via Core
+    let changes = match get_changed_files() {
+        Ok(c) => c,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Failed to check status: {}", e);
+            return;
         }
+    };
+
+    if changes.is_empty() {
+        println!("Working directory is clean. Nothing to commit.");
+        return;
+    }
+
+    // 2. Display changes
+    println!("\nChanged files:");
+    for file in &changes {
+        let label = match file.status.as_str() {
+            "??" => "[New]",
+            "M" => "[Mod]",
+            "D" => "[Del]",
+            _ => "[...]",
+        };
+        println!("  {} {}", label, file.path);
+    }
+    println!();
+
+    // 3. Ask: Commit everything?
+    let commit_all = Confirm::new("Do you want to commit all changes?")
+        .with_default(true)
+        .prompt();
+
+    match commit_all {
+        Ok(true) => {
+            if let Err(e) = stage_all_files() {
+                eprintln!("Error staging files: {}", e);
+                return;
+            }
+        }
+        Ok(false) => {
+            // 4. Interactive Selection
+            let file_options: Vec<String> = changes
+                .iter()
+                .map(|f| f.path.clone())
+                .collect();
+
+            let selected_files = MultiSelect::new("Select files to include (Space to toggle):", file_options)
+                .with_page_size(10)
+                .prompt();
+
+            match selected_files {
+                Ok(files) if files.is_empty() => {
+                    println!("No files selected. Aborting commit.");
+                    return;
+                }
+                Ok(files) => {
+                    if let Err(e) = stage_files(&files) {
+                        eprintln!("Error staging files: {}", e);
+                        return;
+                    }
+                }
+                Err(_) => {
+                    println!("Selection cancelled.");
+                    return;
+                }
+            }
+        }
+        Err(_) => return,
+    }
+
+    // 5. Prompt for Message
+    let message_prompt = Text::new("Commit message:")
+        .with_validator(|input: &str| {
+            if input.trim().len() < 3 {
+                Ok(Validation::Invalid("Message is too short.".into()))
+            } else {
+                Ok(Validation::Valid)
+            }
+        })
+        .prompt();
+
+    match message_prompt {
+        Ok(msg) => {
+            match create_commit(msg.trim()) {
+                Ok(out) => {
+                    println!("\nSuccess! Commit created.");
+                    // Only show the summary line from git output
+                    if let Some(line) = out.lines().next() {
+                         println!("{}", line);
+                    }
+                }
+                Err(e) => eprintln!("\nError committing: {}", e),
+            }
+        }
+        Err(_) => println!("Commit cancelled."),
     }
 }
 
