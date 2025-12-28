@@ -31,7 +31,7 @@ pub struct RemoteInfo {
 }
 
 
-
+/// List branches with detailed info
 pub fn branches_detailed() -> Result<Vec<BranchInfo>, String> {
     let branch_names = adapters::git_list_branches()?;
 
@@ -65,6 +65,7 @@ pub fn branches_detailed() -> Result<Vec<BranchInfo>, String> {
     Ok(branches)
 }
 
+
 fn parse_remote_url(url: &str) -> (Option<String>, Option<String>, Option<String>) {
     // HTTPS: https://github.com/owner/repo.git
     if let Some(stripped) = url.strip_prefix("https://") {
@@ -97,7 +98,7 @@ fn parse_remote_url(url: &str) -> (Option<String>, Option<String>, Option<String
     (None, None, None)
 }
 
-
+/// List remotes with detailed info
 pub fn remotes_detailed() -> Result<Vec<RemoteInfo>, String> {
     let raw_remotes = adapters::git_list_remotes()?;
 
@@ -134,8 +135,7 @@ pub fn remotes_detailed() -> Result<Vec<RemoteInfo>, String> {
     Ok(remotes)
 }
 
-
-
+/// List commits with detailed info
 pub fn commits_detailed(branch: &str, count: usize) -> Result<Vec<CommitInfo>, String> {
     let raw_commits = crate::adapters::git_list_commits(branch, count)?;
     let commits: Vec<CommitInfo> = raw_commits.into_iter().map(|line| {
@@ -148,4 +148,19 @@ pub fn commits_detailed(branch: &str, count: usize) -> Result<Vec<CommitInfo>, S
         }
     }).collect();
     Ok(commits)
+}
+
+/// Create a commit with the given message
+pub fn create_commit(message: &str) -> Result<String, String> {
+    let msg = message.trim();
+
+    if msg.is_empty() {
+        return Err("Commit message cannot be empty.".to_string());
+    }
+
+    if msg.len() < 5 {
+        return Err("Commit message is too short.".to_string());
+    }
+
+    crate::adapters::git_commit(msg)
 }

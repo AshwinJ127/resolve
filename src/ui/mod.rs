@@ -1,8 +1,10 @@
 use prettytable::{Table, Row, Cell, format};
 use serde::Serialize;
+use std::io::{self, Write};
 
 use crate::core::{remotes_detailed, commits_detailed, BranchInfo};
 
+/// Display branches in a table or JSON
 pub fn show_branches(json: bool) {
     let branches = match crate::core::branches_detailed() {
         Ok(b) => b,
@@ -47,7 +49,7 @@ pub fn show_branches(json: bool) {
     table.printstd();
 }
 
-
+/// Print branches as JSON
 pub fn print_branches_json(branches: &[BranchInfo]) {
     match serde_json::to_string_pretty(branches) {
         Ok(json) => println!("{}", json),
@@ -55,7 +57,7 @@ pub fn print_branches_json(branches: &[BranchInfo]) {
     }
 }
 
-
+/// Display remotes in a table or JSON
 pub fn show_remotes(json: bool) {
     let remotes = match remotes_detailed() {
         Ok(r) => r,
@@ -110,6 +112,7 @@ struct CommitDisplay {
     message: String,
 }
 
+/// Display commits in a table or JSON
 pub fn show_commits(branch: &str, count: usize, json: bool) {
     let commits = match commits_detailed(branch, count) {
         Ok(c) => c,
@@ -159,5 +162,43 @@ pub fn show_commits(branch: &str, count: usize, json: bool) {
     }
 
     table.printstd();
+}
+
+/// Create a new commit with user-provided message
+pub fn new_commit() {
+    println!("Commit message:");
+    print!("> ");
+    io::stdout().flush().unwrap();
+
+    let mut message = String::new();
+    if io::stdin().read_line(&mut message).is_err() {
+        eprintln!("Failed to read input.");
+        return;
+    }
+
+    let message = message.trim();
+
+    println!("\nCreate commit with message:");
+    println!("\"{}\"", message);
+    print!("Proceed? [Y/n]: ");
+    io::stdout().flush().unwrap();
+
+    let mut confirm = String::new();
+    io::stdin().read_line(&mut confirm).unwrap();
+
+    if confirm.trim().eq_ignore_ascii_case("n") {
+        println!("Commit cancelled.");
+        return;
+    }
+
+    match crate::core::create_commit(message) {
+        Ok(output) => {
+            println!("Commit created successfully");
+            println!("{}", output);
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+        }
+    }
 }
 

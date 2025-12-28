@@ -39,6 +39,12 @@ enum Commands {
         count: usize,
     },
 
+    /// Create something new (commit, branch, etc.)
+    New {
+        #[command(subcommand)]
+        entity: NewEntity,
+    },    
+
 }
 
 #[derive(ValueEnum, Clone)]
@@ -46,6 +52,13 @@ enum ShowEntity {
     Branches,
     Remotes,
     Commits,
+}
+
+#[derive(Subcommand)]
+enum NewEntity {
+    /// Create a new commit
+    Commit,
+
 }
 
 
@@ -71,6 +84,10 @@ fn main() {
             ShowEntity::Branches => ui::show_branches(json),
             ShowEntity::Remotes => ui::show_remotes(json),
             ShowEntity::Commits => ui::show_commits(&branch, count, json),
+        },
+        Commands::New { entity } => match entity {
+            NewEntity::Commit => ui::new_commit(),
+            //NewEntity::Branch => ui::new_branch(), // stub for now
         },
     }
 }

@@ -34,6 +34,13 @@ pub fn git_push() -> Result<String, String> {
     run_git_command(&["push"])
 }
 
+/// Commit changes with a message
+pub fn git_commit(message: &str) -> Result<String, String> {
+    run_git_command(&["add", "."])?;
+    run_git_command(&["commit", "-m", message])
+}
+
+
 /// Stash uncommitted changes
 pub fn git_stash() -> Result<String, String> {
     run_git_command(&["stash", "push", "-u"])
