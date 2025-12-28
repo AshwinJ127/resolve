@@ -79,6 +79,33 @@ pub fn git_create_branch(name: &str) -> Result<String, String> {
     run_git_command(&["checkout", "-b", name])
 }
 
+/// Pull changes from remote
+pub fn git_pull() -> Result<String, String> {
+    run_git_command(&["pull"]) 
+}
+
+/// Fetch latest changes/branches from remote (without merging)
+pub fn git_fetch() -> Result<String, String> {
+    run_git_command(&["fetch"])
+}
+
+/// List remote branches with details
+pub fn git_list_remote_branches() -> Result<Vec<String>, String> {
+    let output = run_git_command(&[
+        "for-each-ref",
+        "--format=%(refname:short)|%(authorname)|%(authordate:relative)",
+        "refs/remotes/",
+    ])?;
+    
+    Ok(output.lines().map(|s| s.to_string()).collect())
+}
+
+/// Pull a specific branch from origin
+pub fn git_pull_branch(branch_name: &str) -> Result<String, String> {
+    let clean_name = branch_name.trim_start_matches("origin/");
+    run_git_command(&["pull", "origin", clean_name])
+}
+
 // --- Standard Wrappers (Use trimmed output) ---
 
 pub fn git_branch() -> Result<String, String> {

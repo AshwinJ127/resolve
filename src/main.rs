@@ -71,13 +71,7 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Pull => {
-            println!("rfx pull: running Smart Pull...");
-            match adapters::git_branch() {
-                Ok(branch) => println!("Current branch:\n{}", branch),
-                Err(err) => eprintln!("Error: {}", err),
-            }
-        }
+        Commands::Pull => ui::pull(),
         Commands::Push => {
 
         }

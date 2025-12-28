@@ -1,13 +1,13 @@
 use prettytable::{Table, Row, Cell, format};
 use serde::Serialize;
 use std::io;
-use inquire::{Confirm, MultiSelect, Text, validator::Validation};
+use inquire::{Confirm, MultiSelect, Text, validator::Validation, Select};
 
 use crate::core::{BranchInfo, CommitInfo, RemoteInfo, branches_detailed, 
     commits_detailed, remotes_detailed, create_commit, get_changed_files, 
     stage_all_files, stage_files,
     validate_new_branch_name, create_branch,
-    get_status
+    get_status, pull_changes, get_remote_branches, pull_specific_branch,
 };
 
 /// Display branches in a table or JSON
@@ -371,4 +371,100 @@ pub fn show_status() {
         println!("\nTip: Use 'rfx new commit' to save these.");
     }
     println!();
+}
+
+pub fn pull() {
+    // --- STEP 1: SAFETY CHECK (The "Action Prompt") ---
+    loop {
+        let changes = match get_changed_files() {
+            Ok(c) => c,
+            Err(_) => Vec::new(),
+        };
+
+        if changes.is_empty() {
+            break;
+        }
+
+        println!("\nYou have uncommitted changes:");
+        for file in changes.iter().take(5) {
+            println!("   - {}", file.path);
+        }
+        if changes.len() > 5 { println!("   ...and {} more.", changes.len() - 5); }
+        println!();
+
+        let options = vec!["Commit changes now", "Cancel"];
+        let choice = Select::new("What would you like to do?", options).prompt();
+
+        match choice {
+            Ok("Commit changes now") => {
+                new_commit(); 
+            }
+            _ => {
+                println!("Pull cancelled.");
+                return;
+            }
+        }
+    }
+
+    // --- STEP 2: BRANCH SELECTION ---
+    println!("\nFetching latest updates from remote...");
+    
+    let branches = match get_remote_branches() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("Error fetching branches: {}", e);
+            return;
+        }
+    };
+
+    if branches.is_empty() {
+        println!("No remote branches found. (Are you connected to the internet?)");
+        return;
+    }
+
+    let options: Vec<String> = branches.iter().map(|b| {
+        format!("{: <15} | {: <15} | {}", b.short_name, b.author, b.date)
+    }).collect();
+
+    let selection = Select::new("Select branch to pull from:", options)
+        .with_page_size(10)
+        .prompt();
+
+    let selected_branch = match selection {
+        Ok(s) => {
+            let index = branches.iter().position(|b| {
+                 let fmt = format!("{: <15} | {: <15} | {}", b.short_name, b.author, b.date);
+                 fmt == s
+            }).unwrap();
+            &branches[index]
+        }
+        Err(_) => {
+            println!("Cancelled.");
+            return;
+        }
+    };
+
+    // --- STEP 3: EXECUTE ---
+    println!("\n⬇ Pulling from '{}'...", selected_branch.full_name);
+
+    match pull_specific_branch(&selected_branch.full_name) {
+        Ok(out) => {
+            if out.contains("Already up to date") {
+                 println!("Already up to date.");
+            } else {
+                 println!("Success! Updates received.");
+                 println!("{}", out);
+            }
+        }
+        Err(e) => {
+            if e.to_lowercase().contains("conflict") {
+                eprintln!("\nMerge Conflict Detected:");
+                eprintln!("   We downloaded the code, but couldn't combine it automatically.");
+                eprintln!("   Please open the conflicting files and resolve the issues.");
+            } else {
+                eprintln!("\nError pulling:");
+                eprintln!("{}", e);
+            }
+        }
+    }
 }

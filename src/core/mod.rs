@@ -30,6 +30,14 @@ pub struct RemoteInfo {
     pub repo: Option<String>,
 }
 
+#[derive(Serialize, Clone)]
+pub struct RemoteBranchInfo {
+    pub full_name: String, // e.g. origin/main
+    pub short_name: String, // e.g. main
+    pub author: String,
+    pub date: String,
+}
+
 /// Represents a file change in a commit
 #[derive(Clone, Debug, Serialize)]
 pub struct FileChange {
@@ -248,4 +256,48 @@ pub fn validate_new_branch_name(name: &str) -> Result<(), String> {
 /// Create and switch to a new branch
 pub fn create_branch(name: &str) -> Result<String, String> {
     adapters::git_create_branch(name)
+}
+
+/// Pull changes safely
+pub fn pull_changes() -> Result<String, String> {
+    // 1. Safety Check: Ensure working directory is clean
+    let changes = get_changed_files()?;
+    if !changes.is_empty() {
+        return Err("You have uncommitted changes. Please commit or stash them before pulling.".to_string());
+    }
+
+    // 2. Execute Pull
+    adapters::git_pull()
+}
+
+
+/// Get list of remote branches with details
+pub fn get_remote_branches() -> Result<Vec<RemoteBranchInfo>, String> {
+    // 1. Fetch first to ensure data is fresh
+    let _ = adapters::git_fetch(); 
+
+    // 2. Get list
+    let raw = adapters::git_list_remote_branches()?;
+    
+    let branches = raw.into_iter().filter_map(|line| {
+        let parts: Vec<&str> = line.split('|').collect();
+        if parts.len() < 3 { return None; }
+        
+        let full_name = parts[0].to_string();
+        let short_name = full_name.splitn(2, '/').nth(1).unwrap_or(&full_name).to_string();
+
+        Some(RemoteBranchInfo {
+            full_name,
+            short_name,
+            author: parts[1].to_string(),
+            date: parts[2].to_string(),
+        })
+    }).collect();
+
+    Ok(branches)
+}
+
+/// Execute the pull for a specific branch
+pub fn pull_specific_branch(branch_full_name: &str) -> Result<String, String> {
+    adapters::git_pull_branch(branch_full_name)
 }
