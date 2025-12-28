@@ -8,6 +8,7 @@ use crate::core::{BranchInfo, CommitInfo, RemoteInfo, branches_detailed,
     stage_all_files, stage_files,
     validate_new_branch_name, create_branch,
     get_status, pull_changes, get_remote_branches, pull_specific_branch,
+    push_changes, push_branch
 };
 
 /// Display branches in a table or JSON
@@ -463,6 +464,125 @@ pub fn pull() {
                 eprintln!("   Please open the conflicting files and resolve the issues.");
             } else {
                 eprintln!("\nError pulling:");
+                eprintln!("{}", e);
+            }
+        }
+    }
+}
+
+pub fn push() {
+    // --- STEP 1: SAFETY CHECK ---
+    loop {
+        let changes = match get_changed_files() {
+            Ok(c) => c,
+            Err(_) => Vec::new(),
+        };
+
+        if changes.is_empty() {
+            break;
+        }
+
+        println!("\nYou have uncommitted changes:");
+        for file in changes.iter().take(5) {
+            println!("   - {}", file.path);
+        }
+        if changes.len() > 5 { println!("   ...and {} more.", changes.len() - 5); }
+        println!();
+
+        let options = vec![
+            "Commit changes now (Recommended)",
+            "Push existing commits (Keep changes local)", 
+            "Cancel"
+        ];
+        
+        let choice = Select::new("What would you like to do?", options).prompt();
+
+        match choice {
+            Ok("Commit changes now (Recommended)") => {
+                new_commit(); 
+            }
+            Ok("Push existing commits (Keep changes local)") => {
+                println!("\n[Note] Your uncommitted changes will NOT be sent to the server.");
+                break;
+            }
+            _ => {
+                println!("Push cancelled.");
+                return;
+            }
+        }
+    }
+
+    // --- STEP 2: BRANCH SELECTION ---
+    println!("\nPreparing to push...");
+
+    // 1. Get detailed list of LOCAL branches
+    let branches = match branches_detailed() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("Error reading branches: {}", e);
+            return;
+        }
+    };
+
+    if branches.is_empty() {
+        println!("No branches found (this is very strange).");
+        return;
+    }
+
+    // 2. Identify current branch to mark it as default
+    let current_branch = crate::adapters::git_branch().unwrap_or_default();
+
+    // 3. Format the menu
+    let options: Vec<String> = branches.iter().map(|b| {
+        let marker = if b.name == current_branch { "*" } else { " " };
+        format!("{} {: <15} | {: <15} | {}", marker, b.name, b.author, b.last_change)
+    }).collect();
+
+    let default_index = branches.iter().position(|b| b.name == current_branch).unwrap_or(0);
+
+    let selection = Select::new("Select branch to push:", options)
+        .with_starting_cursor(default_index)
+        .with_page_size(10)
+        .prompt();
+
+    let selected_branch_name = match selection {
+        Ok(s) => {
+            let index = branches.iter().position(|b| {
+                let marker = if b.name == current_branch { "*" } else { " " };
+                let fmt = format!("{} {: <15} | {: <15} | {}", marker, b.name, b.author, b.last_change);
+                fmt == s
+            }).unwrap();
+            &branches[index].name
+        }
+        Err(_) => {
+            println!("Cancelled.");
+            return;
+        }
+    };
+
+    // --- STEP 3: EXECUTE ---
+    println!("\nPushing '{}' to origin...", selected_branch_name);
+    
+    match push_branch(selected_branch_name) {
+        Ok(out) => {
+            println!("\nSuccess! Code pushed to origin.");
+            if !out.trim().is_empty() {
+                println!("{}", out); 
+            }
+        }
+        Err(e) => {
+            if e.contains("rejected") || e.contains("fetch first") {
+                eprintln!("\n[Push Rejected]");
+                eprintln!("The remote repository has changes that you do not have.");
+                eprintln!("(This usually means someone else pushed code recently).");
+                eprintln!("\nAction: Run 'rfx pull' first to update your branch.");
+            } 
+            else if e.contains("Could not read from remote") {
+                eprintln!("\n[Connection Error]");
+                eprintln!("Could not connect to the remote server.");
+            }
+            else {
+                eprintln!("\nError pushing changes:");
                 eprintln!("{}", e);
             }
         }

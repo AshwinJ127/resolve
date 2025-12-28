@@ -311,3 +311,13 @@ pub fn get_remote_branches() -> Result<Vec<RemoteBranchInfo>, String> {
 pub fn pull_specific_branch(branch_full_name: &str) -> Result<String, String> {
     adapters::git_pull_branch(branch_full_name)
 }
+
+/// Push changes to the remote
+pub fn push_changes() -> Result<String, String> {
+    let branch = adapters::git_branch()?;
+    adapters::git_push_upstream(&branch)
+}
+
+pub fn push_branch(branch_name: &str) -> Result<String, String> {
+    adapters::git_push_upstream(branch_name)
+}

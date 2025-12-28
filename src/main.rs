@@ -72,9 +72,7 @@ fn main() {
 
     match cli.command {
         Commands::Pull => ui::pull(),
-        Commands::Push => {
-
-        }
+        Commands::Push => ui::push(),
         Commands::Fix => {
             
         }
