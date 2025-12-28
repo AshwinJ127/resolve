@@ -156,6 +156,24 @@ pub fn git_add(files: &[String]) -> Result<String, String> {
     run_git_command(&args)
 }
 
+/// Check if local branch is ahead/behind remote
+/// Returns: Ok((ahead_count, behind_count))
+pub fn git_ahead_behind(branch: &str) -> Result<(usize, usize), String> {
+    // "git rev-list --left-right --count HEAD...@{u}"
+    // Output format: "3 1" (3 ahead, 1 behind)
+    let output = run_git_command(&["rev-list", "--left-right", "--count", &format!("{}...@{{u}}", branch)])
+        .map_err(|_| "No upstream found".to_string())?;
+
+    let parts: Vec<&str> = output.split_whitespace().collect();
+    if parts.len() == 2 {
+        let ahead = parts[0].parse().unwrap_or(0);
+        let behind = parts[1].parse().unwrap_or(0);
+        Ok((ahead, behind))
+    } else {
+        Ok((0, 0))
+    }
+}
+
 /// Stage all files
 pub fn git_add_all() -> Result<String, String> {
     run_git_command(&["add", "-A"])

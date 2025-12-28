@@ -43,7 +43,9 @@ enum Commands {
     New {
         #[command(subcommand)]
         entity: NewEntity,
-    },    
+    },   
+    
+    Status,
 
 }
 
@@ -91,5 +93,6 @@ fn main() {
             NewEntity::Commit => ui::new_commit(),
             NewEntity::Branch => ui::new_branch(), 
         },
+        Commands::Status => ui::show_status(),
     }
 }

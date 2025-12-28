@@ -6,7 +6,8 @@ use inquire::{Confirm, MultiSelect, Text, validator::Validation};
 use crate::core::{BranchInfo, CommitInfo, RemoteInfo, branches_detailed, 
     commits_detailed, remotes_detailed, create_commit, get_changed_files, 
     stage_all_files, stage_files,
-    validate_new_branch_name, create_branch
+    validate_new_branch_name, create_branch,
+    get_status
 };
 
 /// Display branches in a table or JSON
@@ -326,5 +327,48 @@ pub fn new_branch() {
         },
         Err(e) => eprintln!("\nError creating branch: {}", e),
     }
+}
+
+pub fn show_status() {
+    let status = match get_status() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error getting status: {}", e);
+            return;
+        }
+    };
+
+    println!("\nOn branch: {}", status.branch);
+
+    // 1. Sync Status
+    if status.ahead == 0 && status.behind == 0 {
+        println!("Up to date with remote");
+    } else {
+        if status.ahead > 0 {
+            println!("⬆ {} commit(s) ahead (use 'rfx push' to share)", status.ahead);
+        }
+        if status.behind > 0 {
+            println!("⬇ {} commit(s) behind (use 'rfx pull' to update)", status.behind);
+        }
+    }
+    println!();
+
+    // 2. File Status
+    if status.changes.is_empty() {
+        println!("Working directory clean");
+    } else {
+        println!("Unsaved Changes:");
+        for file in status.changes {
+            let label = match file.status.as_str() {
+                "??" => "[New]",
+                "M" | "M " => "[Mod]",
+                "D" | "D " => "[Del]",
+                _ => "[...]",
+            };
+            println!("   {} {}", label, file.path);
+        }
+        println!("\nTip: Use 'rfx new commit' to save these.");
+    }
+    println!();
 }
 

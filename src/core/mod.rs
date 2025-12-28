@@ -37,6 +37,31 @@ pub struct FileChange {
     pub path: String,
 }
 
+/// Summary of the repository status
+#[derive(Serialize)]
+pub struct StatusSummary {
+    pub branch: String,
+    pub ahead: usize,
+    pub behind: usize,
+    pub changes: Vec<FileChange>,
+}
+
+/// Get the current status summary
+pub fn get_status() -> Result<StatusSummary, String> {
+    let branch = adapters::git_branch()?;
+    let changes = get_changed_files()?;
+    
+    // Default to 0,0 if no upstream is set (e.g., local-only branch)
+    let (ahead, behind) = adapters::git_ahead_behind(&branch).unwrap_or((0, 0));
+
+    Ok(StatusSummary {
+        branch,
+        ahead,
+        behind,
+        changes,
+    })
+}
+
 /// List branches with detailed info
 pub fn branches_detailed() -> Result<Vec<BranchInfo>, String> {
     let branch_names = adapters::git_list_branches()?;
