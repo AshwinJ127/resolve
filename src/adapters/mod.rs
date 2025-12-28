@@ -80,9 +80,11 @@ pub fn git_create_branch(name: &str) -> Result<String, String> {
 }
 
 /// Pull changes from remote
+/*
 pub fn git_pull() -> Result<String, String> {
     run_git_command(&["pull"]) 
 }
+*/
 
 /// Fetch latest changes/branches from remote (without merging)
 pub fn git_fetch() -> Result<String, String> {
@@ -104,6 +106,12 @@ pub fn git_list_remote_branches() -> Result<Vec<String>, String> {
 pub fn git_pull_branch(branch_name: &str) -> Result<String, String> {
     let clean_name = branch_name.trim_start_matches("origin/");
     run_git_command(&["pull", "origin", clean_name])
+}
+
+/// Undo the last commit but keep changes in the working directory
+pub fn git_reset_soft(count: usize) -> Result<String, String> {
+    let arg = format!("HEAD~{}", count);
+    run_git_command(&["reset", "--soft", &arg])
 }
 
 // --- Standard Wrappers (Use trimmed output) ---

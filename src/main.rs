@@ -19,8 +19,6 @@ enum Commands {
     Pull,
     /// Push changes safely
     Push,
-    /// Attempt to fix issues automatically
-    Fix,
 
     Show {
         #[arg(value_enum)]
@@ -47,6 +45,7 @@ enum Commands {
     
     Status,
 
+    Undo,
 }
 
 #[derive(ValueEnum, Clone)]
@@ -73,9 +72,6 @@ fn main() {
     match cli.command {
         Commands::Pull => ui::pull(),
         Commands::Push => ui::push(),
-        Commands::Fix => {
-            
-        }
         Commands::Show { entity, json, branch, count } => match entity {
             ShowEntity::Branches => ui::show_branches(json),
             ShowEntity::Remotes => ui::show_remotes(json),
@@ -86,5 +82,6 @@ fn main() {
             NewEntity::Branch => ui::new_branch(), 
         },
         Commands::Status => ui::show_status(),
+        Commands::Undo => ui::undo(),
     }
 }

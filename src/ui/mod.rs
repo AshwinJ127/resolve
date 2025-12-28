@@ -1,15 +1,16 @@
 use prettytable::{Table, Row, Cell, format};
-use serde::Serialize;
-use std::io;
 use inquire::{Confirm, MultiSelect, Text, validator::Validation, Select};
 
-use crate::core::{BranchInfo, CommitInfo, RemoteInfo, branches_detailed, 
+use crate::core::{BranchInfo, branches_detailed, 
     commits_detailed, remotes_detailed, create_commit, get_changed_files, 
     stage_all_files, stage_files,
     validate_new_branch_name, create_branch,
-    get_status, pull_changes, get_remote_branches, pull_specific_branch,
-    push_changes, push_branch
+    get_status, get_remote_branches, pull_specific_branch,
+    push_branch,
+    undo_last_commit,
 };
+
+use crate::adapters::git_last_commit;
 
 /// Display branches in a table or JSON
 pub fn show_branches(json: bool) {
@@ -108,15 +109,6 @@ pub fn show_remotes(json: bool) {
     }
 
     table.printstd();
-}
-
-
-#[derive(Serialize)]
-struct CommitDisplay {
-    hash: String,
-    author: String,
-    date: String,
-    message: String,
 }
 
 /// Display commits in a table or JSON
@@ -586,5 +578,42 @@ pub fn push() {
                 eprintln!("{}", e);
             }
         }
+    }
+}
+
+pub fn undo() {
+    let last_commit_msg = match git_last_commit("HEAD") {
+        Ok(s) => {
+            s.split('|').nth(1).unwrap_or("Unknown").to_string()
+        },
+        Err(_) => "Unknown".to_string(),
+    };
+
+    println!("\n[Undo Last Commit]");
+    println!("This will unsave commit: \"{}\"", last_commit_msg);
+    println!("Your files will NOT be deleted. They will move back to 'Unsaved Changes'.");
+    println!();
+
+    let confirm = Confirm::new("Are you sure you want to undo this commit?")
+        .with_default(false)
+        .prompt();
+
+    match confirm {
+        Ok(true) => {
+            match undo_last_commit() {
+                Ok(_) => {
+                    println!("\nSuccess! Commit undone.");
+                    println!("Your changes are now waiting in the staging area.");
+                },
+                Err(e) => {
+                    eprintln!("\nError undoing commit:");
+                    eprintln!("{}", e);
+                    if e.contains("ambiguous argument") || e.contains("unknown revision") {
+                         eprintln!("(Hint: You cannot undo if there are no commits yet).");
+                    }
+                }
+            }
+        },
+        _ => println!("Cancelled."),
     }
 }

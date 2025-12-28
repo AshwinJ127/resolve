@@ -259,6 +259,7 @@ pub fn create_branch(name: &str) -> Result<String, String> {
 }
 
 /// Pull changes safely
+/*
 pub fn pull_changes() -> Result<String, String> {
     // 1. Safety Check: Ensure working directory is clean
     let changes = get_changed_files()?;
@@ -269,7 +270,7 @@ pub fn pull_changes() -> Result<String, String> {
     // 2. Execute Pull
     adapters::git_pull()
 }
-
+*/
 
 /// Get list of remote branches with details
 pub fn get_remote_branches() -> Result<Vec<RemoteBranchInfo>, String> {
@@ -313,11 +314,18 @@ pub fn pull_specific_branch(branch_full_name: &str) -> Result<String, String> {
 }
 
 /// Push changes to the remote
+/*
 pub fn push_changes() -> Result<String, String> {
     let branch = adapters::git_branch()?;
     adapters::git_push_upstream(&branch)
 }
-
+*/
 pub fn push_branch(branch_name: &str) -> Result<String, String> {
     adapters::git_push_upstream(branch_name)
+}
+
+/// Undo the last commit
+pub fn undo_last_commit() -> Result<String, String> {
+    // We strictly undo 1 commit
+    adapters::git_reset_soft(1)
 }
