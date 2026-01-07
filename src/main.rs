@@ -1,7 +1,5 @@
+use rfx::{adapters, core};
 use clap::{Parser, Subcommand, ValueEnum};
-
-mod adapters;
-mod core;
 mod ui;
 
 /// Resolve CLI - rfx
