@@ -12,6 +12,9 @@ struct UiBranchInfo {
     current: bool,
     ahead: usize,
     behind: usize,
+    author: String,
+    date: String,
+    message: String,
 }
 
 #[tauri::command]
@@ -34,6 +37,9 @@ fn get_repo_overview() -> Result<RepoOverview, String> {
             current: is_current,
             ahead,
             behind,
+            author: b.author,
+            date: b.last_change,
+            message: b.last_commit,
         }
     }).collect();
 

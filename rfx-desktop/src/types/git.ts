@@ -4,6 +4,9 @@ export interface BranchInfo {
   ahead: number;
   behind: number;
   upstream?: string;
+  author: string;
+  date: string;
+  message: string;
 }
 
 export interface RepoOverview {
