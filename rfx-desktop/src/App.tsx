@@ -1,14 +1,22 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { RefreshCw, RotateCw, Terminal, Activity } from "lucide-react";
+import BranchList from "./components/BranchList";
+import ActionBar from "./components/ActionBar";
+import NewCommitModal from "./components/NewCommitModal";
+import { RepoOverview } from "./types/git";
 
 function App() {
   const [status, setStatus] = useState("Loading...");
   const [log, setLog] = useState("");
+  const [repo, setRepo] = useState<RepoOverview | null>(null);
+  const [commitOpen, setCommitOpen] = useState(false);
 
   async function fetchStatus() {
     try {
-      const result = await invoke("get_git_status");
-      setStatus(result as string);
+      const result = await invoke("get_repo_overview");
+      setRepo(result as RepoOverview);
+      setStatus(JSON.stringify(result, null, 2));
     } catch (e) {
       setStatus("Error: " + e);
     }
@@ -30,47 +38,88 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-8">
-      {/* Main Card */}
-      <div className="w-full max-w-md bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-6">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            rfx Dashboard
-          </h1>
-          <span className="px-2 py-1 text-xs font-mono bg-gray-800 rounded text-gray-400">v0.1.0</span>
+    <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-blue-500/30">
+      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-gray-800 bg-gray-950/80 px-6 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400">
+            <Activity size={18} />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold tracking-wide text-gray-100">RFX DASHBOARD</h1>
+            <div className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+              <span className="text-xs font-medium text-gray-500">v0.1.0</span>
+            </div>
+          </div>
         </div>
 
-        {/* Status Display */}
-        <div className="bg-black/50 rounded-lg p-4 font-mono text-sm text-green-400 mb-6 border border-gray-800">
-          <pre>{status}</pre>
-        </div>
-
-        {/* Actions Grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <button 
-            onClick={handleSync}
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded-lg font-medium transition-all active:scale-95"
-          >
-            <span>🔄</span> Sync
-          </button>
-          
-          <button 
+        <div className="flex items-center gap-2">
+          <button
             onClick={fetchStatus}
-            className="bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-lg font-medium transition-all active:scale-95"
+            className="group flex items-center justify-center rounded-lg border border-gray-800 bg-gray-900 p-2 text-gray-400 transition-colors hover:border-gray-700 hover:text-white"
+            title="Refresh Status"
           >
-            Refresh
+            <RefreshCw size={18} className="transition-transform group-active:rotate-180" />
+          </button>
+          <button
+            onClick={handleSync}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-blue-500 active:scale-95"
+          >
+            <RotateCw size={16} />
+            <span>Sync</span>
           </button>
         </div>
+      </header>
 
-        {/* Logs Area */}
-        {log && (
-          <div className="mt-4 p-3 bg-gray-800/50 rounded border border-gray-700 text-xs text-gray-400 font-mono break-words">
-            {log}
+      <main className="mx-auto max-w-5xl space-y-6 p-6">
+        {status.startsWith("Error") && (
+          <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-4 text-sm text-red-400">
+            <p className="font-mono">{status}</p>
           </div>
         )}
-      </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-1">
+              {repo ? (
+                <BranchList branches={repo.branches} />
+              ) : (
+                <div className="flex h-32 items-center justify-center text-sm text-gray-500">
+                  No repository data loaded
+                </div>
+              )}
+            </div>
+
+            <ActionBar
+              onCommit={() => setCommitOpen(true)}
+              onNewBranch={() => invoke("create_branch")}
+              onSync={handleSync}
+            />
+          </div>
+
+          <div className="lg:col-span-1">
+            <div className="h-full rounded-xl border border-gray-800 bg-black/40 p-4">
+              <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <Terminal size={14} />
+                <span>System Logs</span>
+              </div>
+              <div className="font-mono text-xs text-gray-400 break-all leading-relaxed">
+                {log || <span className="text-gray-700">Waiting for actions...</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <NewCommitModal
+        open={commitOpen}
+        onClose={() => setCommitOpen(false)}
+        onSubmit={async (msg) => {
+          await invoke("create_commit", { message: msg });
+          setCommitOpen(false);
+          fetchStatus();
+        }}
+      />
     </div>
   );
 }
