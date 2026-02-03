@@ -1,10 +1,9 @@
 interface Props {
   onCommit: () => void;
   onNewBranch: () => void;
-  onSync: () => void;
 }
 
-export default function ActionBar({ onCommit, onNewBranch, onSync }: Props) {
+export default function ActionBar({ onCommit, onNewBranch}: Props) {
   return (
     <div className="grid grid-cols-2 gap-2 mt-4">
       <button

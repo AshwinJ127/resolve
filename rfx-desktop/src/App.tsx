@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { RefreshCw, RotateCw, Terminal, Activity } from "lucide-react";
+import { RefreshCw, RotateCw, Activity } from "lucide-react";
 import BranchList from "./components/BranchList";
 import ActionBar from "./components/ActionBar";
 import NewCommitModal from "./components/NewCommitModal";
+import NewBranchModal from "./components/NewBranchModal";
 import { RepoOverview } from "./types/git";
 
 function App() {
@@ -11,6 +12,7 @@ function App() {
   const [log, setLog] = useState("");
   const [repo, setRepo] = useState<RepoOverview | null>(null);
   const [commitOpen, setCommitOpen] = useState(false);
+  const [branchOpen, setBranchOpen] = useState(false);
 
   async function fetchStatus() {
     try {
@@ -71,44 +73,36 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 p-6">
+      <main className="mx-auto max-w-7xl space-y-6 p-6">
         {status.startsWith("Error") && (
           <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-4 text-sm text-red-400">
             <p className="font-mono">{status}</p>
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-1">
-              {repo ? (
-                <BranchList branches={repo.branches} />
-              ) : (
-                <div className="flex h-32 items-center justify-center text-sm text-gray-500">
-                  No repository data loaded
-                </div>
-              )}
-            </div>
-
-            <ActionBar
-              onCommit={() => setCommitOpen(true)}
-              onNewBranch={() => invoke("create_branch")}
-              onSync={handleSync}
-            />
+        <div className="space-y-6">
+          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-1">
+            {repo ? (
+              <BranchList branches={repo.branches} />
+            ) : (
+              <div className="flex h-32 items-center justify-center text-sm text-gray-500">
+                No repository data loaded
+              </div>
+            )}
           </div>
 
-          <div className="lg:col-span-1">
-            <div className="h-full rounded-xl border border-gray-800 bg-black/40 p-4">
-              <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                <Terminal size={14} />
-                <span>System Logs</span>
-              </div>
-              <div className="font-mono text-xs text-gray-400 break-all leading-relaxed">
-                {log || <span className="text-gray-700">Waiting for actions...</span>}
-              </div>
-            </div>
-          </div>
+          <ActionBar
+            onCommit={() => setCommitOpen(true)}
+            onNewBranch={() => setBranchOpen(true)}
+          />
         </div>
+        
+        {log && (
+            <div className="rounded-lg bg-black/40 border border-gray-800 p-4 font-mono text-xs text-gray-400">
+                <div className="mb-2 text-gray-500 font-bold uppercase tracking-wider">Logs</div>
+                {log}
+            </div>
+        )}
       </main>
 
       <NewCommitModal
@@ -118,6 +112,20 @@ function App() {
           await invoke("create_commit", { message: msg });
           setCommitOpen(false);
           fetchStatus();
+        }}
+      />
+
+      <NewBranchModal
+        open={branchOpen}
+        onClose={() => setBranchOpen(false)}
+        onSubmit={async (name) => {
+          try {
+            await invoke("create_branch", { name });
+            setBranchOpen(false);
+            fetchStatus();
+          } catch (e) {
+            alert("Branch creation failed: " + e);
+          }
         }}
       />
     </div>

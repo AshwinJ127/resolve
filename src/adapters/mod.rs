@@ -131,6 +131,7 @@ pub fn git_add_all() -> Result<String, String> {
 }
 
 pub fn git_commit(message: &str) -> Result<String, String> {
+    
     run_git_command(&["commit", "-m", message])
 }
 

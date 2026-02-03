@@ -18,6 +18,16 @@ struct UiBranchInfo {
 }
 
 #[tauri::command]
+fn create_commit(message: String) -> Result<String, String> {
+    core::create_commit(&message).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_branch(name: String) -> Result<String, String> {
+    core::create_branch(&name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_repo_overview() -> Result<RepoOverview, String> {
     let all_branches = core::branches_detailed().map_err(|e| e.to_string())?;
     
@@ -84,7 +94,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_git_status, 
             smart_sync,
-            get_repo_overview
+            get_repo_overview,
+            create_commit, 
+            create_branch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
