@@ -14,3 +14,8 @@ export interface RepoOverview {
   branches: BranchInfo[];
   clean: boolean;
 }
+
+export interface FileChange {
+  path: string;
+  status: string; // "M", "D", "??"
+}

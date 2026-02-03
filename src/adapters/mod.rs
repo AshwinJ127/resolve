@@ -1,9 +1,35 @@
-use std::process::Command;
+use std::process:: {Command, Stdio};
+use std::path::PathBuf;
+use std::sync::OnceLock;
+
+static GIT_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+fn get_repo_root() -> &'static PathBuf {
+    GIT_ROOT.get_or_init(|| {
+        // Ask git where the root is
+        let output = Command::new("git")
+            .args(&["rev-parse", "--show-toplevel"])
+            .output()
+            .expect("Failed to execute git rev-parse");
+
+        if output.status.success() {
+            let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            PathBuf::from(path_str)
+        } else {
+            // Fallback: If we aren't in a git repo, just use current dir
+            // (This prevents the app from crashing if opened outside a repo)
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        }
+    })
+}
 
 /// Run a git command and return the trimmed output
 /// Use this for almost everything (getting branch names, hashes, etc.)
 fn run_git_command(args: &[&str]) -> Result<String, String> {
+    let root = get_repo_root();
+
     let output = Command::new("git")
+        .current_dir(root)
         .args(args)
         .output()
         .map_err(|e| format!("Failed to execute git: {}", e))?;
@@ -18,7 +44,10 @@ fn run_git_command(args: &[&str]) -> Result<String, String> {
 /// Run a git command and return the RAW output (preserving whitespace)
 /// Use this ONLY when column alignment matters (like `git status`)
 fn run_git_command_raw(args: &[&str]) -> Result<String, String> {
+    let root = get_repo_root();
+
     let output = Command::new("git")
+        .current_dir(root)
         .args(args)
         .output()
         .map_err(|e| format!("Failed to execute git: {}", e))?;
@@ -131,7 +160,7 @@ pub fn git_add_all() -> Result<String, String> {
 }
 
 pub fn git_commit(message: &str) -> Result<String, String> {
-    
+
     run_git_command(&["commit", "-m", message])
 }
 

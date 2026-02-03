@@ -108,10 +108,9 @@ function App() {
       <NewCommitModal
         open={commitOpen}
         onClose={() => setCommitOpen(false)}
-        onSubmit={async (msg) => {
-          await invoke("create_commit", { message: msg });
-          setCommitOpen(false);
-          fetchStatus();
+        onSubmit={() => {
+           fetchStatus(); 
+           setCommitOpen(false);
         }}
       />
 

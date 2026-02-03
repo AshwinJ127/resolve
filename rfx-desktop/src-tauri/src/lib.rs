@@ -1,4 +1,4 @@
-use rfx::core;
+use rfx::core::{self, FileChange};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -25,6 +25,21 @@ fn create_commit(message: String) -> Result<String, String> {
 #[tauri::command]
 fn create_branch(name: String) -> Result<String, String> {
     core::create_branch(&name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_pending_changes() -> Result<Vec<FileChange>, String> {
+    core::get_changed_files().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn commit_selection(message: String, files: Vec<String>) -> Result<String, String> {
+    if files.is_empty() {
+        return Err("No files selected.".to_string());
+    }
+
+    core::stage_files(&files).map_err(|e| e.to_string())?;
+    core::create_commit(&message).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -97,6 +112,8 @@ pub fn run() {
             get_repo_overview,
             create_commit, 
             create_branch,
+            get_pending_changes,
+            commit_selection,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
