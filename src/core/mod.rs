@@ -203,6 +203,16 @@ pub fn get_changed_files() -> Result<Vec<FileChange>, String> {
     Ok(changes)
 }
 
+// Stash current changes
+pub fn stash_changes() -> Result<String, String> {
+    adapters::git_stash_push()
+}
+
+// Pop the latest stash
+pub fn pop_stash() -> Result<String, String> {
+    adapters::git_stash_pop()
+}
+
 // Stage specific files
 pub fn stage_files(files: &[String]) -> Result<String, String> {
     if files.is_empty() {
@@ -251,6 +261,16 @@ pub fn validate_new_branch_name(name: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Switch the upstream remote for a branch
+pub fn switch_remote(branch: &str, remote: &str) -> Result<String, String> {
+    adapters::git_set_remote(branch, remote)
+}
+
+/// Switch to an existing branch
+pub fn switch_branch(name: &str) -> Result<String, String> {
+    adapters::git_switch_branch(name)
 }
 
 /// Create and switch to a new branch

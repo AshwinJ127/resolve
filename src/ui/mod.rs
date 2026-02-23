@@ -1,16 +1,205 @@
 use prettytable::{Table, Row, Cell, format};
 use inquire::{Confirm, MultiSelect, Text, validator::Validation, Select};
 
-use crate::core::{BranchInfo, branches_detailed, 
-    commits_detailed, remotes_detailed, create_commit, get_changed_files, 
-    stage_all_files, stage_files,
-    validate_new_branch_name, create_branch,
-    get_status, get_remote_branches, pull_specific_branch,
-    push_branch,
-    undo_last_commit,
+use crate::core::{
+    BranchInfo, branches_detailed, commits_detailed, create_branch, create_commit,
+    get_changed_files, get_remote_branches, get_status, push_branch,
+    pull_specific_branch, remotes_detailed, stage_all_files, stage_files,
+    undo_last_commit, validate_new_branch_name,
 };
 
+pub fn switch_remote() {
+    // 1. Get current branch
+    let current_branch = match crate::adapters::git_branch() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("Error getting current branch: {}", e);
+            return;
+        }
+    };
+
+    // 2. Get remotes
+    let remotes = match remotes_detailed() {
+        Ok(r) => r.into_iter().filter(|r| r.direction == "fetch").collect::<Vec<_>>(),
+        Err(e) => {
+            eprintln!("Error fetching remotes: {}", e);
+            return;
+        }
+    };
+
+    if remotes.is_empty() {
+        println!("No remotes found to switch to.");
+        return;
+    }
+
+    // 3. Format the menu
+    let options: Vec<String> = remotes.iter().map(|r| {
+        format!("{} ({})", r.name, r.url)
+    }).collect();
+
+    let selection = Select::new("Select a remote to track:", options)
+        .with_page_size(10)
+        .prompt();
+
+    let selected_remote_name = match selection {
+        Ok(s) => {
+            let index = remotes.iter().position(|r| {
+                let fmt = format!("{} ({})", r.name, r.url);
+                fmt == s
+            }).unwrap();
+            &remotes[index].name
+        }
+        Err(_) => {
+            println!("Cancelled.");
+            return;
+        }
+    };
+
+    // 4. EXECUTE
+    println!("\nSetting upstream for '{}' to '{}'...", current_branch, selected_remote_name);
+
+    match crate::core::switch_remote(&current_branch, selected_remote_name) {
+        Ok(_) => {
+            println!("\nSuccess! Branch '{}' is now tracking '{}'.", current_branch, selected_remote_name);
+        }
+        Err(e) => {
+            eprintln!("\nError setting remote: {}", e);
+        }
+    }
+}
+
+
 use crate::adapters::git_last_commit;
+
+pub fn switch_branch() {
+    // 0. PRE-FLIGHT CHECK for uncommitted changes
+    let changes = match get_changed_files() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to check for changes: {}", e);
+            return;
+        }
+    };
+
+    if !changes.is_empty() {
+        println!("\nYou have uncommitted changes. To switch branches, you need to save them first.");
+        let options = vec![
+            "Stash changes and switch",
+            "Commit changes now",
+            "Cancel",
+        ];
+        let choice = Select::new("What would you like to do?", options).prompt();
+
+        match choice {
+            Ok("Stash changes and switch") => {
+                println!("\nStashing changes...");
+                if let Err(e) = crate::core::stash_changes() {
+                    eprintln!("Error stashing changes: {}", e);
+                    return;
+                }
+            }
+            Ok("Commit changes now") => {
+                new_commit();
+                // After commit, check if there are still changes. If so, abort.
+                if !get_changed_files().unwrap_or_default().is_empty() {
+                    println!("\nCommit was cancelled or failed. Aborting switch.");
+                    return;
+                }
+            }
+            _ => {
+                println!("Switch cancelled.");
+                return;
+            }
+        }
+    }
+
+    // 1. Get detailed list of LOCAL branches
+    let branches = match branches_detailed() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("Error reading branches: {}", e);
+            return;
+        }
+    };
+
+    if branches.is_empty() {
+        println!("No branches found to switch to.");
+        return;
+    }
+
+    // 2. Identify current branch to mark it as default
+    let current_branch = match crate::adapters::git_branch() {
+        Ok(b) => b,
+        Err(_) => String::new(),
+    };
+
+    // 3. Format the menu
+    let options: Vec<String> = branches.iter().map(|b| {
+        let marker = if b.name == current_branch { "*" } else { " " };
+        format!("{} {: <20} | Last commit: {}", marker, b.name, b.last_commit)
+    }).collect();
+
+    let default_index = branches.iter().position(|b| b.name == current_branch).unwrap_or(0);
+
+    let selection = Select::new("Select branch to switch to:", options)
+        .with_starting_cursor(default_index)
+        .with_page_size(10)
+        .prompt();
+
+    let selected_branch_name = match selection {
+        Ok(s) => {
+            let index = branches.iter().position(|b| {
+                let marker = if b.name == current_branch { "*" } else { " " };
+                let fmt = format!("{} {: <20} | Last commit: {}", marker, b.name, b.last_commit);
+                fmt == s
+            }).unwrap();
+            &branches[index].name
+        }
+        Err(_) => {
+            println!("Cancelled.");
+            // If we stashed, we should pop it back
+            if !changes.is_empty() {
+                let _ = crate::core::pop_stash();
+            }
+            return;
+        }
+    };
+    
+    if selected_branch_name == &current_branch {
+        println!("You are already on branch '{}'.", current_branch);
+        // If we stashed, we should pop it back
+        if !changes.is_empty() {
+            let _ = crate::core::pop_stash();
+        }
+        return;
+    }
+
+    // 4. EXECUTE ---
+    println!("\nSwitching to '{}'...", selected_branch_name);
+    
+    match crate::core::switch_branch(selected_branch_name) {
+        Ok(_) => {
+            println!("\nSuccess! Switched to branch '{}'.", selected_branch_name);
+            // If we stashed changes, try to pop them
+            if !changes.is_empty() {
+                println!("Applying stashed changes...");
+                if let Err(e) = crate::core::pop_stash() {
+                    eprintln!("\nWarning: Could not apply stashed changes.");
+                    eprintln!("   Run `git stash pop` manually to resolve conflicts.");
+                    eprintln!("   Error: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("\nError switching branch: {}", e);
+            // If we stashed, we should pop it back
+            if !changes.is_empty() {
+                let _ = crate::core::pop_stash();
+            }
+        }
+    }
+}
+
 
 /// Display branches in a table or JSON
 pub fn show_branches(json: bool) {

@@ -43,6 +43,11 @@ fn commit_selection(message: String, files: Vec<String>) -> Result<String, Strin
 }
 
 #[tauri::command]
+fn switch_branch(name: String) -> Result<String, String> {
+    core::switch_branch(&name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_repo_overview() -> Result<RepoOverview, String> {
     let all_branches = core::branches_detailed().map_err(|e| e.to_string())?;
     
@@ -103,6 +108,17 @@ fn smart_sync() -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+fn switch_remote(remote: String) -> Result<String, String> {
+    let branch = core::get_status().map_err(|e| e.to_string())?.branch;
+    core::switch_remote(&branch, &remote).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_remotes() -> Result<Vec<core::RemoteInfo>, String> {
+    core::remotes_detailed().map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -114,6 +130,9 @@ pub fn run() {
             create_branch,
             get_pending_changes,
             commit_selection,
+            switch_branch,
+            switch_remote,
+            get_remotes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

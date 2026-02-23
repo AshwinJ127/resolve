@@ -103,6 +103,17 @@ pub fn git_push_upstream(branch: &str) -> Result<String, String> {
     run_git_command(&["push", "-u", "origin", branch])
 }
 
+/// Set the upstream for a branch
+pub fn git_set_remote(branch: &str, remote: &str) -> Result<String, String> {
+    let upstream = format!("{}/{}", remote, branch);
+    run_git_command(&["branch", "--set-upstream-to", &upstream, branch])
+}
+
+/// Switch to an existing branch
+pub fn git_switch_branch(name: &str) -> Result<String, String> {
+    run_git_command(&["checkout", name])
+}
+
 /// Create and switch to a new branch
 pub fn git_create_branch(name: &str) -> Result<String, String> {
     run_git_command(&["checkout", "-b", name])
@@ -135,6 +146,16 @@ pub fn git_list_remote_branches() -> Result<Vec<String>, String> {
 pub fn git_pull_branch(branch_name: &str) -> Result<String, String> {
     let clean_name = branch_name.trim_start_matches("origin/");
     run_git_command(&["pull", "origin", clean_name])
+}
+
+/// Stash current changes
+pub fn git_stash_push() -> Result<String, String> {
+    run_git_command(&["stash", "push", "-m", "rfx auto-stash"])
+}
+
+/// Pop the latest stash
+pub fn git_stash_pop() -> Result<String, String> {
+    run_git_command(&["stash", "pop"])
 }
 
 /// Undo the last commit but keep changes in the working directory

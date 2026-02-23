@@ -1,11 +1,38 @@
+import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { BranchInfo } from "../types/git";
 import { GitBranch, GitCommit, User, Calendar, ArrowUp, ArrowDown, Globe } from "lucide-react";
 
 interface Props {
   branches: BranchInfo[];
+  onSwitch: () => void; // Callback to refresh data
 }
 
-export default function BranchList({ branches }: Props) {
+export default function BranchList({ branches, onSwitch }: Props) {
+  const [switchingTo, setSwitchingTo] = useState<string | null>(null);
+
+  const handleSwitchBranch = async (branchName: string) => {
+    if (switchingTo) return; // Prevent multiple clicks
+
+    const targetBranch = branches.find(b => b.name === branchName);
+    if (!targetBranch || targetBranch.current) {
+      return; // Don't switch to current branch
+    }
+
+    setSwitchingTo(branchName);
+    try {
+      await invoke("switch_branch", { name: branchName });
+      // Instead of reloading, we'll call the callback to refresh
+      onSwitch(); 
+    } catch (error) {
+      console.error("Failed to switch branch:", error);
+      // You might want to show a toast notification here
+    } finally {
+      // The component will unmount/re-render, so this is just a fallback
+      setSwitchingTo(null);
+    }
+  };
+
   return (
     <div className="bg-black/40 rounded-xl border border-gray-800 overflow-hidden flex flex-col h-full">
       {/* Header */}
@@ -35,10 +62,15 @@ export default function BranchList({ branches }: Props) {
           </thead>
           <tbody className="divide-y divide-gray-800/50">
             {branches.map((branch) => (
-              <tr 
-                key={branch.name} 
+              <tr
+                key={branch.name}
+                onClick={() => handleSwitchBranch(branch.name)}
                 className={`group transition-colors hover:bg-white/5 ${
-                  branch.current ? "bg-blue-900/10 hover:bg-blue-900/20" : ""
+                  branch.current 
+                    ? "bg-blue-900/10 hover:bg-blue-900/20" 
+                    : "cursor-pointer"
+                } ${
+                  switchingTo === branch.name ? "opacity-50 animate-pulse" : ""
                 }`}
               >
                 {/* 1. Branch Name & Upstream */}
@@ -54,6 +86,9 @@ export default function BranchList({ branches }: Props) {
                         <span className="px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]">
                           HEAD
                         </span>
+                      )}
+                      {switchingTo === branch.name && (
+                        <span className="text-xs text-yellow-400">Switching...</span>
                       )}
                     </div>
                     {branch.upstream && (
@@ -113,7 +148,7 @@ export default function BranchList({ branches }: Props) {
                 </td>
 
                 {/* 5. Date */}
-                <td className="px-4 py-3 align-top text-right text-gray-500 font-mono text-xs whitespace-nowrap">
+                <td className="px-4 py-3 align-top text-right text-gray-500 font-mono text-xs whitespace-n-wrap">
                   <div className="flex items-center justify-end gap-1.5 h-full">
                     <span>{branch.date}</span>
                     <Calendar size={12} className="opacity-40" />

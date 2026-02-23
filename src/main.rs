@@ -44,6 +44,20 @@ enum Commands {
     Status,
 
     Undo,
+
+    /// Switch to a different branch or remote
+    Switch {
+        #[command(subcommand)]
+        entity: SwitchEntity,
+    },
+}
+
+#[derive(Subcommand)]
+enum SwitchEntity {
+    /// Switch to a different branch
+    Branch,
+    /// Switch to a different remote
+    Remote,
 }
 
 #[derive(ValueEnum, Clone)]
@@ -81,5 +95,9 @@ fn main() {
         },
         Commands::Status => ui::show_status(),
         Commands::Undo => ui::undo(),
+        Commands::Switch { entity } => match entity {
+            SwitchEntity::Branch => ui::switch_branch(),
+            SwitchEntity::Remote => ui::switch_remote(),
+        },
     }
 }

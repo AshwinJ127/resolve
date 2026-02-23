@@ -5,6 +5,7 @@ import BranchList from "./components/BranchList";
 import ActionBar from "./components/ActionBar";
 import NewCommitModal from "./components/NewCommitModal";
 import NewBranchModal from "./components/NewBranchModal";
+import RemoteSelector from "./components/RemoteSelector";
 import { RepoOverview } from "./types/git";
 
 function App() {
@@ -55,7 +56,8 @@ function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+          <RemoteSelector />
           <button
             onClick={fetchStatus}
             className="group flex items-center justify-center rounded-lg border border-gray-800 bg-gray-900 p-2 text-gray-400 transition-colors hover:border-gray-700 hover:text-white"
@@ -83,7 +85,7 @@ function App() {
         <div className="space-y-6">
           <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-1">
             {repo ? (
-              <BranchList branches={repo.branches} />
+              <BranchList branches={repo.branches} onSwitch={fetchStatus} />
             ) : (
               <div className="flex h-32 items-center justify-center text-sm text-gray-500">
                 No repository data loaded
