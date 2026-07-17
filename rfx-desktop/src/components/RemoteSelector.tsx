@@ -5,6 +5,7 @@ import { Globe } from "lucide-react";
 interface Remote {
   name: string;
   url: string;
+  direction: string;
 }
 
 export default function RemoteSelector() {
@@ -15,7 +16,7 @@ export default function RemoteSelector() {
   async function fetchRemotes() {
     try {
       const result = await invoke("get_remotes");
-      const fetchedRemotes = result as Remote[];
+      const fetchedRemotes = (result as Remote[]).filter(r => r.direction === "fetch");
       setRemotes(fetchedRemotes);
       // Heuristic to find the current remote, find a better way later
       const upstream = fetchedRemotes.find(r => r.name === "origin") || fetchedRemotes[0];
@@ -58,7 +59,7 @@ export default function RemoteSelector() {
         className="bg-gray-800 border border-gray-700 rounded-md px-2 py-1 text-xs text-white"
       >
         {remotes.map((remote) => (
-          <option key={remote.name} value={remote.name}>
+          <option key={`${remote.name}-${remote.url}`} value={remote.name}>
             {remote.name}
           </option>
         ))}

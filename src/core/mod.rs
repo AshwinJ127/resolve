@@ -1,4 +1,4 @@
-use crate::adapters;
+use crate::adapters::Repo;
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
@@ -55,11 +55,11 @@ pub struct StatusSummary {
 }
 
 /// Get the current status summary
-pub fn get_status() -> Result<StatusSummary, String> {
-    let branch = adapters::git_branch()?;
-    let changes = get_changed_files()?;
-    
-    let (ahead, behind) = match adapters::git_ahead_behind(&branch) {
+pub fn get_status(repo: &Repo) -> Result<StatusSummary, String> {
+    let branch = repo.branch()?;
+    let changes = get_changed_files(repo)?;
+
+    let (ahead, behind) = match repo.ahead_behind(&branch) {
         Ok((a, b)) => (Some(a), Some(b)),
         Err(_) => (None, None),
     };
@@ -73,21 +73,21 @@ pub fn get_status() -> Result<StatusSummary, String> {
 }
 
 /// List branches with detailed info
-pub fn branches_detailed() -> Result<Vec<BranchInfo>, String> {
-    let branch_names = adapters::git_list_branches()?;
+pub fn branches_detailed(repo: &Repo) -> Result<Vec<BranchInfo>, String> {
+    let branch_names = repo.list_branches()?;
 
     let branches: Vec<BranchInfo> = branch_names
         .into_iter()
         .map(|branch| {
             // First commit (creator info)
-            let first_commit = adapters::git_first_commit(&branch)
+            let first_commit = repo.first_commit(&branch)
                 .unwrap_or_else(|_| "Unknown|Unknown".to_string());
             let mut parts = first_commit.split('|');
             let author = parts.next().unwrap_or("Unknown").to_string();
             let time_created = parts.next().unwrap_or("Unknown").to_string();
 
             // Last commit info
-            let last_commit = adapters::git_last_commit(&branch)
+            let last_commit = repo.last_commit(&branch)
                 .unwrap_or_else(|_| "Unknown|No commit".to_string());
             let mut last_parts = last_commit.split('|');
             let last_change = last_parts.next().unwrap_or("Unknown").to_string();
@@ -105,7 +105,6 @@ pub fn branches_detailed() -> Result<Vec<BranchInfo>, String> {
 
     Ok(branches)
 }
-
 
 fn parse_remote_url(url: &str) -> (Option<String>, Option<String>, Option<String>) {
     // HTTPS: https://github.com/owner/repo.git
@@ -140,8 +139,8 @@ fn parse_remote_url(url: &str) -> (Option<String>, Option<String>, Option<String
 }
 
 /// List remotes with detailed info
-pub fn remotes_detailed() -> Result<Vec<RemoteInfo>, String> {
-    let raw_remotes = adapters::git_list_remotes()?;
+pub fn remotes_detailed(repo: &Repo) -> Result<Vec<RemoteInfo>, String> {
+    let raw_remotes = repo.list_remotes()?;
 
     let remotes = raw_remotes
         .into_iter()
@@ -177,8 +176,8 @@ pub fn remotes_detailed() -> Result<Vec<RemoteInfo>, String> {
 }
 
 /// List commits with detailed info
-pub fn commits_detailed(branch: &str, count: usize) -> Result<Vec<CommitInfo>, String> {
-    let raw_commits = crate::adapters::git_list_commits(branch, count)?;
+pub fn commits_detailed(repo: &Repo, branch: &str, count: usize) -> Result<Vec<CommitInfo>, String> {
+    let raw_commits = repo.list_commits(branch, count)?;
     let commits: Vec<CommitInfo> = raw_commits.into_iter().map(|line| {
         let parts: Vec<&str> = line.split('|').collect();
         CommitInfo {
@@ -192,9 +191,9 @@ pub fn commits_detailed(branch: &str, count: usize) -> Result<Vec<CommitInfo>, S
 }
 
 // Get list of changed files
-pub fn get_changed_files() -> Result<Vec<FileChange>, String> {
-    let raw_files = adapters::git_status_porcelain()?;
-    
+pub fn get_changed_files(repo: &Repo) -> Result<Vec<FileChange>, String> {
+    let raw_files = repo.status_porcelain()?;
+
     let changes = raw_files
         .into_iter()
         .map(|(status, path)| FileChange { status, path })
@@ -204,46 +203,46 @@ pub fn get_changed_files() -> Result<Vec<FileChange>, String> {
 }
 
 // Stash current changes
-pub fn stash_changes() -> Result<String, String> {
-    adapters::git_stash_push()
+pub fn stash_changes(repo: &Repo) -> Result<String, String> {
+    repo.stash_push()
 }
 
 // Pop the latest stash
-pub fn pop_stash() -> Result<String, String> {
-    adapters::git_stash_pop()
+pub fn pop_stash(repo: &Repo) -> Result<String, String> {
+    repo.stash_pop()
 }
 
 // Stage specific files
-pub fn stage_files(files: &[String]) -> Result<String, String> {
+pub fn stage_files(repo: &Repo, files: &[String]) -> Result<String, String> {
     if files.is_empty() {
         return Ok("No files to stage".to_string());
     }
-    adapters::git_add(files)
+    repo.add(files)
 }
 
 // Stage all files
-pub fn stage_all_files() -> Result<String, String> {
-    adapters::git_add_all()
+pub fn stage_all_files(repo: &Repo) -> Result<String, String> {
+    repo.add_all()
 }
 
 // Create commit with message
-pub fn create_commit(message: &str) -> Result<String, String> {
+pub fn create_commit(repo: &Repo, message: &str) -> Result<String, String> {
     let msg = message.trim();
 
     if msg.is_empty() {
         return Err("Commit message cannot be empty.".to_string());
     }
-    
+
     // We can keep the length check here as a business rule
     if msg.len() < 3 {
         return Err("Commit message is too short.".to_string());
     }
 
-    adapters::git_commit(msg)
+    repo.commit(msg)
 }
 
 /// Check if a branch name is valid and available
-pub fn validate_new_branch_name(name: &str) -> Result<(), String> {
+pub fn validate_new_branch_name(repo: &Repo, name: &str) -> Result<(), String> {
     let name = name.trim();
 
     // 1. Basic Syntax Rules
@@ -255,7 +254,7 @@ pub fn validate_new_branch_name(name: &str) -> Result<(), String> {
     }
 
     // 2. Check Existence
-    let existing_branches = adapters::git_list_branches()?;
+    let existing_branches = repo.list_branches()?;
     if existing_branches.iter().any(|b| b == name) {
         return Err(format!("A branch named '{}' already exists.", name));
     }
@@ -264,53 +263,39 @@ pub fn validate_new_branch_name(name: &str) -> Result<(), String> {
 }
 
 /// Switch the upstream remote for a branch
-pub fn switch_remote(branch: &str, remote: &str) -> Result<String, String> {
-    adapters::git_set_remote(branch, remote)
+pub fn switch_remote(repo: &Repo, branch: &str, remote: &str) -> Result<String, String> {
+    repo.set_remote(branch, remote)
 }
 
 /// Switch to an existing branch
-pub fn switch_branch(name: &str) -> Result<String, String> {
-    adapters::git_switch_branch(name)
+pub fn switch_branch(repo: &Repo, name: &str) -> Result<String, String> {
+    repo.switch_branch(name)
 }
 
 /// Create and switch to a new branch
-pub fn create_branch(name: &str) -> Result<String, String> {
-    adapters::git_create_branch(name)
+pub fn create_branch(repo: &Repo, name: &str) -> Result<String, String> {
+    repo.create_branch(name)
 }
-
-/// Pull changes safely
-/*
-pub fn pull_changes() -> Result<String, String> {
-    // 1. Safety Check: Ensure working directory is clean
-    let changes = get_changed_files()?;
-    if !changes.is_empty() {
-        return Err("You have uncommitted changes. Please commit or stash them before pulling.".to_string());
-    }
-
-    // 2. Execute Pull
-    adapters::git_pull()
-}
-*/
 
 /// Get list of remote branches with details
-pub fn get_remote_branches() -> Result<Vec<RemoteBranchInfo>, String> {
+pub fn get_remote_branches(repo: &Repo) -> Result<Vec<RemoteBranchInfo>, String> {
     // 1. Fetch first
-    let _ = adapters::git_fetch(); 
+    let _ = repo.fetch();
 
     // 2. Get list
-    let raw = adapters::git_list_remote_branches()?;
-    
+    let raw = repo.list_remote_branches()?;
+
     let branches = raw.into_iter().filter_map(|line| {
         let parts: Vec<&str> = line.split('|').collect();
         if parts.len() < 3 { return None; }
-        
+
         let full_name = parts[0].to_string();
-        
+
         // --- FILTERS ---
         if full_name.ends_with("/HEAD") || full_name == "HEAD" {
             return None;
         }
-        
+
         if !full_name.contains('/') {
             return None;
         }
@@ -329,23 +314,54 @@ pub fn get_remote_branches() -> Result<Vec<RemoteBranchInfo>, String> {
 }
 
 /// Execute the pull for a specific branch
-pub fn pull_specific_branch(branch_full_name: &str) -> Result<String, String> {
-    adapters::git_pull_branch(branch_full_name)
+pub fn pull_specific_branch(repo: &Repo, branch_full_name: &str) -> Result<String, String> {
+    repo.pull_branch(branch_full_name)
 }
 
 /// Push changes to the remote
-/*
-pub fn push_changes() -> Result<String, String> {
-    let branch = adapters::git_branch()?;
-    adapters::git_push_upstream(&branch)
-}
-*/
-pub fn push_branch(branch_name: &str) -> Result<String, String> {
-    adapters::git_push_upstream(branch_name)
+pub fn push_branch(repo: &Repo, branch_name: &str) -> Result<String, String> {
+    repo.push_upstream(branch_name)
 }
 
 /// Undo the last commit
-pub fn undo_last_commit() -> Result<String, String> {
+pub fn undo_last_commit(repo: &Repo) -> Result<String, String> {
     // We strictly undo 1 commit
-    adapters::git_reset_soft(1)
+    repo.reset_soft(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_https_remote_url() {
+        let (host, owner, repo) = parse_remote_url("https://github.com/AshwinJ127/resolve.git");
+        assert_eq!(host, Some("github.com".to_string()));
+        assert_eq!(owner, Some("AshwinJ127".to_string()));
+        assert_eq!(repo, Some("resolve".to_string()));
+    }
+
+    #[test]
+    fn parses_https_remote_url_without_git_suffix() {
+        let (host, owner, repo) = parse_remote_url("https://github.com/AshwinJ127/resolve");
+        assert_eq!(host, Some("github.com".to_string()));
+        assert_eq!(owner, Some("AshwinJ127".to_string()));
+        assert_eq!(repo, Some("resolve".to_string()));
+    }
+
+    #[test]
+    fn parses_ssh_remote_url() {
+        let (host, owner, repo) = parse_remote_url("git@github.com:AshwinJ127/resolve.git");
+        assert_eq!(host, Some("github.com".to_string()));
+        assert_eq!(owner, Some("AshwinJ127".to_string()));
+        assert_eq!(repo, Some("resolve".to_string()));
+    }
+
+    #[test]
+    fn returns_none_for_malformed_url() {
+        let (host, owner, repo) = parse_remote_url("not-a-url");
+        assert_eq!(host, None);
+        assert_eq!(owner, None);
+        assert_eq!(repo, None);
+    }
 }

@@ -1,6 +1,7 @@
 use prettytable::{Table, Row, Cell, format};
 use inquire::{Confirm, MultiSelect, Text, validator::Validation, Select};
 
+use crate::adapters::Repo;
 use crate::core::{
     BranchInfo, branches_detailed, commits_detailed, create_branch, create_commit,
     get_changed_files, get_remote_branches, get_status, push_branch,
@@ -8,9 +9,9 @@ use crate::core::{
     undo_last_commit, validate_new_branch_name,
 };
 
-pub fn switch_remote() {
+pub fn switch_remote(repo: &Repo) {
     // 1. Get current branch
-    let current_branch = match crate::adapters::git_branch() {
+    let current_branch = match repo.branch() {
         Ok(b) => b,
         Err(e) => {
             eprintln!("Error getting current branch: {}", e);
@@ -19,7 +20,7 @@ pub fn switch_remote() {
     };
 
     // 2. Get remotes
-    let remotes = match remotes_detailed() {
+    let remotes = match remotes_detailed(repo) {
         Ok(r) => r.into_iter().filter(|r| r.direction == "fetch").collect::<Vec<_>>(),
         Err(e) => {
             eprintln!("Error fetching remotes: {}", e);
@@ -39,16 +40,10 @@ pub fn switch_remote() {
 
     let selection = Select::new("Select a remote to track:", options)
         .with_page_size(10)
-        .prompt();
+        .raw_prompt();
 
     let selected_remote_name = match selection {
-        Ok(s) => {
-            let index = remotes.iter().position(|r| {
-                let fmt = format!("{} ({})", r.name, r.url);
-                fmt == s
-            }).unwrap();
-            &remotes[index].name
-        }
+        Ok(choice) => &remotes[choice.index].name,
         Err(_) => {
             println!("Cancelled.");
             return;
@@ -58,7 +53,7 @@ pub fn switch_remote() {
     // 4. EXECUTE
     println!("\nSetting upstream for '{}' to '{}'...", current_branch, selected_remote_name);
 
-    match crate::core::switch_remote(&current_branch, selected_remote_name) {
+    match crate::core::switch_remote(repo, &current_branch, selected_remote_name) {
         Ok(_) => {
             println!("\nSuccess! Branch '{}' is now tracking '{}'.", current_branch, selected_remote_name);
         }
@@ -68,12 +63,9 @@ pub fn switch_remote() {
     }
 }
 
-
-use crate::adapters::git_last_commit;
-
-pub fn switch_branch() {
+pub fn switch_branch(repo: &Repo) {
     // 0. PRE-FLIGHT CHECK for uncommitted changes
-    let changes = match get_changed_files() {
+    let changes = match get_changed_files(repo) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Failed to check for changes: {}", e);
@@ -93,15 +85,15 @@ pub fn switch_branch() {
         match choice {
             Ok("Stash changes and switch") => {
                 println!("\nStashing changes...");
-                if let Err(e) = crate::core::stash_changes() {
+                if let Err(e) = crate::core::stash_changes(repo) {
                     eprintln!("Error stashing changes: {}", e);
                     return;
                 }
             }
             Ok("Commit changes now") => {
-                new_commit();
+                new_commit(repo);
                 // After commit, check if there are still changes. If so, abort.
-                if !get_changed_files().unwrap_or_default().is_empty() {
+                if !get_changed_files(repo).unwrap_or_default().is_empty() {
                     println!("\nCommit was cancelled or failed. Aborting switch.");
                     return;
                 }
@@ -114,7 +106,7 @@ pub fn switch_branch() {
     }
 
     // 1. Get detailed list of LOCAL branches
-    let branches = match branches_detailed() {
+    let branches = match branches_detailed(repo) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("Error reading branches: {}", e);
@@ -128,7 +120,7 @@ pub fn switch_branch() {
     }
 
     // 2. Identify current branch to mark it as default
-    let current_branch = match crate::adapters::git_branch() {
+    let current_branch = match repo.branch() {
         Ok(b) => b,
         Err(_) => String::new(),
     };
@@ -144,46 +136,39 @@ pub fn switch_branch() {
     let selection = Select::new("Select branch to switch to:", options)
         .with_starting_cursor(default_index)
         .with_page_size(10)
-        .prompt();
+        .raw_prompt();
 
     let selected_branch_name = match selection {
-        Ok(s) => {
-            let index = branches.iter().position(|b| {
-                let marker = if b.name == current_branch { "*" } else { " " };
-                let fmt = format!("{} {: <20} | Last commit: {}", marker, b.name, b.last_commit);
-                fmt == s
-            }).unwrap();
-            &branches[index].name
-        }
+        Ok(choice) => &branches[choice.index].name,
         Err(_) => {
             println!("Cancelled.");
             // If we stashed, we should pop it back
             if !changes.is_empty() {
-                let _ = crate::core::pop_stash();
+                let _ = crate::core::pop_stash(repo);
             }
             return;
         }
     };
-    
+
     if selected_branch_name == &current_branch {
         println!("You are already on branch '{}'.", current_branch);
         // If we stashed, we should pop it back
         if !changes.is_empty() {
-            let _ = crate::core::pop_stash();
+            let _ = crate::core::pop_stash(repo);
         }
         return;
     }
 
     // 4. EXECUTE ---
     println!("\nSwitching to '{}'...", selected_branch_name);
-    
-    match crate::core::switch_branch(selected_branch_name) {
+
+    match crate::core::switch_branch(repo, selected_branch_name) {
         Ok(_) => {
             println!("\nSuccess! Switched to branch '{}'.", selected_branch_name);
             // If we stashed changes, try to pop them
             if !changes.is_empty() {
                 println!("Applying stashed changes...");
-                if let Err(e) = crate::core::pop_stash() {
+                if let Err(e) = crate::core::pop_stash(repo) {
                     eprintln!("\nWarning: Could not apply stashed changes.");
                     eprintln!("   Run `git stash pop` manually to resolve conflicts.");
                     eprintln!("   Error: {}", e);
@@ -194,16 +179,15 @@ pub fn switch_branch() {
             eprintln!("\nError switching branch: {}", e);
             // If we stashed, we should pop it back
             if !changes.is_empty() {
-                let _ = crate::core::pop_stash();
+                let _ = crate::core::pop_stash(repo);
             }
         }
     }
 }
 
-
 /// Display branches in a table or JSON
-pub fn show_branches(json: bool) {
-    let branches = match crate::core::branches_detailed() {
+pub fn show_branches(repo: &Repo, json: bool) {
+    let branches = match crate::core::branches_detailed(repo) {
         Ok(b) => b,
         Err(err) => {
             eprintln!("Error retrieving branches: {}", err);
@@ -255,8 +239,8 @@ pub fn print_branches_json(branches: &[BranchInfo]) {
 }
 
 /// Display remotes in a table or JSON
-pub fn show_remotes(json: bool) {
-    let remotes = match remotes_detailed() {
+pub fn show_remotes(repo: &Repo, json: bool) {
+    let remotes = match remotes_detailed(repo) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("Error fetching remotes: {}", e);
@@ -285,7 +269,7 @@ pub fn show_remotes(json: bool) {
 
     for r in remotes {
         let owner = r.owner.unwrap_or_else(|| "-".into());
-        let repo = r.repo.unwrap_or_else(|| "-".into());
+        let repo_name = r.repo.unwrap_or_else(|| "-".into());
         let host = r.host.unwrap_or_else(|| "-".into());
 
         table.add_row(Row::new(vec![
@@ -293,7 +277,7 @@ pub fn show_remotes(json: bool) {
             Cell::new(&r.direction),
             Cell::new(&host),
             Cell::new(&owner),
-            Cell::new(&repo),
+            Cell::new(&repo_name),
         ]));
     }
 
@@ -301,8 +285,8 @@ pub fn show_remotes(json: bool) {
 }
 
 /// Display commits in a table or JSON
-pub fn show_commits(branch: &str, count: usize, json: bool) {
-    let commits = match commits_detailed(branch, count) {
+pub fn show_commits(repo: &Repo, branch: &str, count: usize, json: bool) {
+    let commits = match commits_detailed(repo, branch, count) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error fetching commits: {}", e);
@@ -353,9 +337,9 @@ pub fn show_commits(branch: &str, count: usize, json: bool) {
 }
 
 /// Create a new commit with user-provided message
-pub fn new_commit() {
+pub fn new_commit(repo: &Repo) {
     // 1. Get current status via Core
-    let changes = match get_changed_files() {
+    let changes = match get_changed_files(repo) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Failed to check status: {}", e);
@@ -388,7 +372,7 @@ pub fn new_commit() {
 
     match commit_all {
         Ok(true) => {
-            if let Err(e) = stage_all_files() {
+            if let Err(e) = stage_all_files(repo) {
                 eprintln!("Error staging files: {}", e);
                 return;
             }
@@ -410,7 +394,7 @@ pub fn new_commit() {
                     return;
                 }
                 Ok(files) => {
-                    if let Err(e) = stage_files(&files) {
+                    if let Err(e) = stage_files(repo, &files) {
                         eprintln!("Error staging files: {}", e);
                         return;
                     }
@@ -437,7 +421,7 @@ pub fn new_commit() {
 
     match message_prompt {
         Ok(msg) => {
-            match create_commit(msg.trim()) {
+            match create_commit(repo, msg.trim()) {
                 Ok(out) => {
                     println!("\nSuccess! Commit created.");
                     // Only show the summary line from git output
@@ -452,32 +436,36 @@ pub fn new_commit() {
     }
 }
 
-pub fn new_branch() {
+pub fn new_branch(repo: &Repo) {
     // 1. Prompt for Name
-    let name_prompt = Text::new("Name for new branch:")
-        .with_validator(|input: &str| {
-            match validate_new_branch_name(input) {
-                Ok(_) => Ok(Validation::Valid),
-                Err(msg) => Ok(Validation::Invalid(msg.into())),
-            }
-        })
-        .prompt();
+    // inquire's with_validator requires V: 'static, which a closure capturing &Repo can't satisfy — validate after each prompt instead.
+    let name = loop {
+        let name_prompt = Text::new("Name for new branch:").prompt();
 
-    let name = match name_prompt {
-        Ok(n) => n.trim().to_string(),
-        Err(_) => { println!("Cancelled."); return; }
+        let raw = match name_prompt {
+            Ok(n) => n,
+            Err(_) => { println!("Cancelled."); return; }
+        };
+
+        match validate_new_branch_name(repo, &raw) {
+            Ok(_) => break raw.trim().to_string(),
+            Err(msg) => {
+                println!("Invalid: {}", msg);
+                continue;
+            }
+        }
     };
 
     // 2. Check for Uncommitted Changes (The "Error" Prevention)
-    let changes = match get_changed_files() {
+    let changes = match get_changed_files(repo) {
         Ok(c) => c,
-        Err(_) => Vec::new(), 
+        Err(_) => Vec::new(),
     };
 
     if !changes.is_empty() {
         println!("\nWarning: You have uncommitted changes.");
         println!("   If you create a new branch now, these changes will move with you.");
-        
+
         let count = changes.len();
         if count <= 5 {
             for file in changes {
@@ -502,7 +490,7 @@ pub fn new_branch() {
     }
 
     // 3. Execute
-    match create_branch(&name) {
+    match create_branch(repo, &name) {
         Ok(_) => {
             println!("\nSuccess! New branch '{}' created.", name);
             println!("   You have been switched to this branch automatically.");
@@ -511,8 +499,8 @@ pub fn new_branch() {
     }
 }
 
-pub fn show_status() {
-    let status = match get_status() {
+pub fn show_status(repo: &Repo) {
+    let status = match get_status(repo) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Error getting status: {}", e);
@@ -532,7 +520,7 @@ pub fn show_status() {
         (None, None) => {
             println!("Status: Not published (Local only)");
         }
-        _ => {}, 
+        _ => {},
     }
     println!();
 
@@ -555,10 +543,10 @@ pub fn show_status() {
     println!();
 }
 
-pub fn pull() {
+pub fn pull(repo: &Repo) {
     // --- STEP 1: SAFETY CHECK (The "Action Prompt") ---
     loop {
-        let changes = match get_changed_files() {
+        let changes = match get_changed_files(repo) {
             Ok(c) => c,
             Err(_) => Vec::new(),
         };
@@ -579,7 +567,7 @@ pub fn pull() {
 
         match choice {
             Ok("Commit changes now") => {
-                new_commit(); 
+                new_commit(repo);
             }
             _ => {
                 println!("Pull cancelled.");
@@ -590,8 +578,8 @@ pub fn pull() {
 
     // --- STEP 2: BRANCH SELECTION ---
     println!("\nFetching latest updates from remote...");
-    
-    let branches = match get_remote_branches() {
+
+    let branches = match get_remote_branches(repo) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("Error fetching branches: {}", e);
@@ -610,16 +598,10 @@ pub fn pull() {
 
     let selection = Select::new("Select branch to pull from:", options)
         .with_page_size(10)
-        .prompt();
+        .raw_prompt();
 
     let selected_branch = match selection {
-        Ok(s) => {
-            let index = branches.iter().position(|b| {
-                 let fmt = format!("{: <15} | {: <15} | {}", b.short_name, b.author, b.date);
-                 fmt == s
-            }).unwrap();
-            &branches[index]
-        }
+        Ok(choice) => &branches[choice.index],
         Err(_) => {
             println!("Cancelled.");
             return;
@@ -629,7 +611,7 @@ pub fn pull() {
     // --- STEP 3: EXECUTE ---
     println!("\n⬇ Pulling from '{}'...", selected_branch.full_name);
 
-    match pull_specific_branch(&selected_branch.full_name) {
+    match pull_specific_branch(repo, &selected_branch.full_name) {
         Ok(out) => {
             if out.contains("Already up to date") {
                  println!("Already up to date.");
@@ -651,10 +633,10 @@ pub fn pull() {
     }
 }
 
-pub fn push() {
+pub fn push(repo: &Repo) {
     // --- STEP 1: SAFETY CHECK ---
     loop {
-        let changes = match get_changed_files() {
+        let changes = match get_changed_files(repo) {
             Ok(c) => c,
             Err(_) => Vec::new(),
         };
@@ -672,15 +654,15 @@ pub fn push() {
 
         let options = vec![
             "Commit changes now (Recommended)",
-            "Push existing commits (Keep changes local)", 
+            "Push existing commits (Keep changes local)",
             "Cancel"
         ];
-        
+
         let choice = Select::new("What would you like to do?", options).prompt();
 
         match choice {
             Ok("Commit changes now (Recommended)") => {
-                new_commit(); 
+                new_commit(repo);
             }
             Ok("Push existing commits (Keep changes local)") => {
                 println!("\n[Note] Your uncommitted changes will NOT be sent to the server.");
@@ -697,7 +679,7 @@ pub fn push() {
     println!("\nPreparing to push...");
 
     // 1. Get detailed list of LOCAL branches
-    let branches = match branches_detailed() {
+    let branches = match branches_detailed(repo) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("Error reading branches: {}", e);
@@ -711,7 +693,7 @@ pub fn push() {
     }
 
     // 2. Identify current branch to mark it as default
-    let current_branch = crate::adapters::git_branch().unwrap_or_default();
+    let current_branch = repo.branch().unwrap_or_default();
 
     // 3. Format the menu
     let options: Vec<String> = branches.iter().map(|b| {
@@ -724,17 +706,10 @@ pub fn push() {
     let selection = Select::new("Select branch to push:", options)
         .with_starting_cursor(default_index)
         .with_page_size(10)
-        .prompt();
+        .raw_prompt();
 
     let selected_branch_name = match selection {
-        Ok(s) => {
-            let index = branches.iter().position(|b| {
-                let marker = if b.name == current_branch { "*" } else { " " };
-                let fmt = format!("{} {: <15} | {: <15} | {}", marker, b.name, b.author, b.last_change);
-                fmt == s
-            }).unwrap();
-            &branches[index].name
-        }
+        Ok(choice) => &branches[choice.index].name,
         Err(_) => {
             println!("Cancelled.");
             return;
@@ -743,12 +718,12 @@ pub fn push() {
 
     // --- STEP 3: EXECUTE ---
     println!("\nPushing '{}' to origin...", selected_branch_name);
-    
-    match push_branch(selected_branch_name) {
+
+    match push_branch(repo, selected_branch_name) {
         Ok(out) => {
             println!("\nSuccess! Code pushed to origin.");
             if !out.trim().is_empty() {
-                println!("{}", out); 
+                println!("{}", out);
             }
         }
         Err(e) => {
@@ -757,7 +732,7 @@ pub fn push() {
                 eprintln!("The remote repository has changes that you do not have.");
                 eprintln!("(This usually means someone else pushed code recently).");
                 eprintln!("\nAction: Run 'rfx pull' first to update your branch.");
-            } 
+            }
             else if e.contains("Could not read from remote") {
                 eprintln!("\n[Connection Error]");
                 eprintln!("Could not connect to the remote server.");
@@ -770,8 +745,8 @@ pub fn push() {
     }
 }
 
-pub fn undo() {
-    let last_commit_msg = match git_last_commit("HEAD") {
+pub fn undo(repo: &Repo) {
+    let last_commit_msg = match repo.last_commit("HEAD") {
         Ok(s) => {
             s.split('|').nth(1).unwrap_or("Unknown").to_string()
         },
@@ -789,7 +764,7 @@ pub fn undo() {
 
     match confirm {
         Ok(true) => {
-            match undo_last_commit() {
+            match undo_last_commit(repo) {
                 Ok(_) => {
                     println!("\nSuccess! Commit undone.");
                     println!("Your changes are now waiting in the staging area.");

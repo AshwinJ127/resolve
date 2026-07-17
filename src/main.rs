@@ -80,24 +80,31 @@ enum NewEntity {
 
 fn main() {
     let cli = Cli::parse();
+    let repo = match adapters::Repo::open() {
+        Ok(repo) => repo,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     match cli.command {
-        Commands::Pull => ui::pull(),
-        Commands::Push => ui::push(),
+        Commands::Pull => ui::pull(&repo),
+        Commands::Push => ui::push(&repo),
         Commands::Show { entity, json, branch, count } => match entity {
-            ShowEntity::Branches => ui::show_branches(json),
-            ShowEntity::Remotes => ui::show_remotes(json),
-            ShowEntity::Commits => ui::show_commits(&branch, count, json),
+            ShowEntity::Branches => ui::show_branches(&repo, json),
+            ShowEntity::Remotes => ui::show_remotes(&repo, json),
+            ShowEntity::Commits => ui::show_commits(&repo, &branch, count, json),
         },
         Commands::New { entity } => match entity {
-            NewEntity::Commit => ui::new_commit(),
-            NewEntity::Branch => ui::new_branch(), 
+            NewEntity::Commit => ui::new_commit(&repo),
+            NewEntity::Branch => ui::new_branch(&repo),
         },
-        Commands::Status => ui::show_status(),
-        Commands::Undo => ui::undo(),
+        Commands::Status => ui::show_status(&repo),
+        Commands::Undo => ui::undo(&repo),
         Commands::Switch { entity } => match entity {
-            SwitchEntity::Branch => ui::switch_branch(),
-            SwitchEntity::Remote => ui::switch_remote(),
+            SwitchEntity::Branch => ui::switch_branch(&repo),
+            SwitchEntity::Remote => ui::switch_remote(&repo),
         },
     }
 }

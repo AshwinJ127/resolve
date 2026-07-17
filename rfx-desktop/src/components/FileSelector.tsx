@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Folder, FileCode, Check, ChevronRight, ChevronDown } from "lucide-react";
 import { FileChange } from "../types/git";
 
@@ -72,7 +72,7 @@ function FlatList({ files, selected, onToggle }: any) {
 }
 
 // Recursive Tree Component
-function FileTree({ node, prefix = "", onToggle, selected }: any) {
+function FileTree({ node, onToggle, selected }: any) {
   const entries = Object.entries(node);
 
   return (
